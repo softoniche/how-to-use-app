@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f8f9fd" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
+    <meta name="robots" content="noindex" />
+    <title>How the app works</title>
+    <link rel="icon" href="assets/img/logo.png" />
+    <link rel="preload" as="image" href="assets/img/logo.png" />
+    <link rel="stylesheet" href="assets/css/style.css" />
+  </head>
+  <body>
+    <!-- The whole guide is drawn by app.js from content.js; this is its frame. -->
+    <div class="app is-loading" id="app">
+      <header class="topbar">
+        <div class="topbar__row">
+          <div class="brand">
+            <img class="brand__logo" id="brand-logo" src="assets/img/logo.png" alt="" />
+            <span class="brand__name" id="brand-name">InvisChat</span>
+          </div>
+          <button class="exit" id="exit" type="button" hidden></button>
+        </div>
+        <div class="progress" id="progress" role="presentation"></div>
+      </header>
+
+      <main class="deck" id="deck" tabindex="-1"></main>
+
+      <footer class="bottombar" id="bottombar">
+        <div class="bottombar__lead" id="lead">
+          <div class="swipe" id="swipe">
+            <span class="swipe__text" id="swipe-text"></span>
+            <span class="swipe__chevrons" aria-hidden="true">
+              <svg class="icon" viewBox="0 0 24 24"><path d="M9.6 5.6l6.4 6.4-6.4 6.4" /></svg>
+              <svg class="icon" viewBox="0 0 24 24"><path d="M9.6 5.6l6.4 6.4-6.4 6.4" /></svg>
+            </span>
+          </div>
+          <button class="back" id="back" type="button" hidden>
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.6 12h13.8" />
+              <path d="M13 6.5l5.5 5.5-5.5 5.5" />
+            </svg>
+            <span id="back-label"></span>
+          </button>
+        </div>
+        <button class="cta" id="cta" type="button">
+          <span id="cta-label"></span>
+          <svg class="icon" id="cta-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+        </button>
+      </footer>
+    </div>
+
+    <!-- Full-screen screenshot: pinch, drag or double-tap to zoom. -->
+    <div class="lightbox" id="lightbox" hidden>
+      <img class="lightbox__img" id="lightbox-img" alt="" />
+      <button class="lightbox__close" id="lightbox-close" type="button">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M6.2 6.2l11.6 11.6" />
+          <path d="M17.8 6.2L6.2 17.8" />
+        </svg>
+      </button>
+      <div class="lightbox__hint">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M9.4 4.6H4.6v4.8" />
+          <path d="M14.6 19.4h4.8v-4.8" />
+          <path d="M4.6 4.6l5.6 5.6" />
+          <path d="M19.4 19.4l-5.6-5.6" />
+        </svg>
+        <span id="lightbox-hint-text"></span>
+      </div>
+    </div>
+
+    <script>
+      // The app's name, shown next to the logo. Kept here so it can be changed
+      // without touching the code.
+      window.GUIDE_APP_NAME = 'InvisChat';
+    </script>
+    <script src="assets/js/i18n.js"></script>
+    <script src="assets/js/content.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>
