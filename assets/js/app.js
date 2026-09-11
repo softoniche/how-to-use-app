@@ -1,15 +1,19 @@
 /* ───────────────────────────────────────────────────────────────────────────
    InvisChat — how the app works
-   A swipeable deck of cards, built from content.js and translated by i18n.js.
+   A small stack of screens, built from content.js and translated by i18n.js.
+   The first one asks what the user wants to know; every answer is one tap
+   away, and the way back is always the same.
 
    Query parameters
      lang=en|tr|de|id|es|pt|ar|fr|ms|af|hi   what language to read it in
-     full=1|0        1 (default) shows every page, 0 only the essential ones
-     pages=a,b,c     an explicit page list, overrides `full`
+     full=1|0        1 (default) shows everything, 0 only connecting
+     platform=android|ios    which recordings to show; read off the browser
+                             when the app does not say
+     screen=<id>     open on a screen other than home — for a support link
      mode=guide|onboarding   onboarding offers "Skip" and ends on "Get started"
      theme=light|dark        defaults to the device setting
 
-   Inside the app it also talks to Flutter: it reports every page change over
+   Inside the app it also talks to Flutter: it reports where the user is over
    the `AppBridge` channel, and Flutter drives it through `window.Guide`.
    Opened in a plain browser, both simply do nothing.
    ─────────────────────────────────────────────────────────────────────────── */
@@ -18,11 +22,14 @@
   'use strict';
 
   var I18N = window.GUIDE_I18N || {};
-  var CONTENT = window.GUIDE_CONTENT || { pages: [] };
+  var CONTENT = window.GUIDE_CONTENT || { screens: {} };
   var ICONS = window.GUIDE_ICONS || {};
+  var APP_NAME = window.GUIDE_APP_NAME || 'InvisChat';
 
   var RTL_LANGUAGES = ['ar'];
   var FALLBACK_LANG = 'en';
+  /** How long a screen takes to slide. Kept in step with style.css. */
+  var TRANSITION = 340;
 
   // ── Parameters ──────────────────────────────────────────────────────────
 
@@ -36,9 +43,9 @@
 
   var lang = pickLanguage(params.get('lang'));
   var isRtl = RTL_LANGUAGES.indexOf(lang) !== -1;
-  var dirSign = isRtl ? -1 : 1;
   var isOnboarding = (params.get('mode') || 'guide') === 'onboarding';
   var showAll = flag('full', true);
+  var platform = pickPlatform(params.get('platform'));
 
   function pickLanguage(requested) {
     var known = Object.keys(I18N.skip || {});
@@ -51,11 +58,32 @@
     return FALLBACK_LANG;
   }
 
+  /**
+   * Which phone this is being read on: it decides which recording is shown,
+   * and can hide a block or an option that only applies to one of them.
+   *
+   * The app says so in the URL. It has not always done, and phones keep old
+   * versions for a long time, so the browser's own word is the fallback — and
+   * a desktop browser, which is neither, previews the Android guide.
+   */
+  function pickPlatform(requested) {
+    var wanted = String(requested || '').toLowerCase();
+    if (wanted === 'ios' || wanted === 'android') return wanted;
+
+    var agent = navigator.userAgent || '';
+    if (/iPhone|iPad|iPod/i.test(agent)) return 'ios';
+    // An iPad calls itself a Mac; a Mac with a touch screen is an iPad.
+    if (/Macintosh/i.test(agent) && navigator.maxTouchPoints > 1) return 'ios';
+    if (/Android/i.test(agent)) return 'android';
+    return 'android';
+  }
+
   /** The translation for a string id, falling back to English. */
   function t(id) {
     var entry = I18N[id];
     if (!entry) return '';
-    return entry[lang] || entry[FALLBACK_LANG] || '';
+    var value = entry[lang] || entry[FALLBACK_LANG] || '';
+    return value.indexOf('{app}') === -1 ? value : value.split('{app}').join(APP_NAME);
   }
 
   function icon(name, extraClass) {
@@ -67,6 +95,14 @@
     return String(value).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+
+  function clamp(value, min, max) {
+    return value < min ? min : value > max ? max : value;
+  }
+
+  function remove(node) {
+    if (node && node.parentNode) node.parentNode.removeChild(node);
   }
 
   // ── The bridge to the app ───────────────────────────────────────────────
@@ -87,22 +123,33 @@
     },
   };
 
-  // ── Which pages to show ─────────────────────────────────────────────────
+  // ── Which screens exist ─────────────────────────────────────────────────
 
-  var pages = CONTENT.pages.filter(function (page) {
-    return showAll || !page.full;
-  });
+  var screens = CONTENT.screens || {};
+  var HOME = CONTENT.home || 'home';
 
-  var explicit = params.get('pages');
-  if (explicit) {
-    var wanted = explicit.split(',').map(function (id) { return id.trim(); });
-    var chosen = wanted
-      .map(function (id) {
-        return CONTENT.pages.filter(function (page) { return page.id === id; })[0];
-      })
-      .filter(Boolean);
-    if (chosen.length) pages = chosen;
+  /** A screen, or nothing when this build of the app does not include it. */
+  function screenDef(id) {
+    var def = screens[id];
+    if (!def) return null;
+    return !showAll && def.full ? null : def;
   }
+
+  /** The items of a block, minus what this build and this phone do not show. */
+  function visible(items) {
+    return (items || []).filter(function (item) {
+      return (showAll || !item.full) && applies(item);
+    });
+  }
+
+  /** Whether something marked for one platform belongs on this one. */
+  function applies(thing) {
+    return !thing.platform || thing.platform === platform;
+  }
+
+  var total = Object.keys(screens).filter(function (id) {
+    return !!screenDef(id);
+  }).length;
 
   // ── Theme ───────────────────────────────────────────────────────────────
 
@@ -120,77 +167,120 @@
     else if (query.addListener) query.addListener(onChange);
   }
 
-  // ── Rendering ───────────────────────────────────────────────────────────
+  // ── The videos ──────────────────────────────────────────────────────────
 
+  // Whether a recording is really there. Asked once, in the background, so a
+  // guide whose videos have not been uploaded yet shows no button that does
+  // nothing — and so the button is already decided by the time it is reached.
+  var videos = {};
+
+  /** A recording's path, with {platform} filled in for the phone reading it. */
+  function videoSrc(block) {
+    if (!block || !block.src) return '';
+    return block.src.split('{platform}').join(platform);
+  }
+
+  function findVideos() {
+    Object.keys(screens).forEach(function (id) {
+      (screens[id].blocks || []).forEach(function (block) {
+        if (block.type !== 'video' || !applies(block)) return;
+        var src = videoSrc(block);
+        if (!src || src in videos) return;
+        videos[src] = undefined;
+        probe(src, function (found) {
+          videos[src] = found;
+          // A screen already on the page catches up with the answer.
+          Array.prototype.forEach.call(document.querySelectorAll('.video'), function (card) {
+            if (card.getAttribute('data-src') !== src) return;
+            if (found) card.hidden = false;
+            else remove(card);
+          });
+        });
+      });
+    });
+  }
+
+  function probe(src, done) {
+    // Opened from a file:// path there is nothing to ask, so trust the content.
+    if (window.location.protocol === 'file:' || typeof window.fetch !== 'function') {
+      done(true);
+      return;
+    }
+    window
+      .fetch(src, { method: 'HEAD' })
+      .then(function (response) { done(!!response.ok); })
+      .catch(function () { done(false); });
+  }
+
+  /** Swaps the button for the player and starts it. */
+  function playVideo(button) {
+    var card = button.parentNode;
+    var src = card.getAttribute('data-src');
+
+    var video = document.createElement('video');
+    video.src = src;
+    video.controls = true;
+    video.preload = 'auto';
+    // Attributes as well as properties: older WebViews only read these.
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.addEventListener('error', function () {
+      card.innerHTML = '<p class="video__error">' + escapeHtml(t('video_error')) + '</p>';
+    });
+
+    var frame = document.createElement('div');
+    frame.className = 'video__player';
+    frame.appendChild(video);
+    card.innerHTML = '';
+    card.appendChild(frame);
+
+    var started = video.play();
+    if (started && started.catch) started.catch(function () { /* the controls are there */ });
+  }
+
+  // ── Drawing a screen ────────────────────────────────────────────────────
+
+  var app = document.getElementById('app');
   var deck = document.getElementById('deck');
-  var progress = document.getElementById('progress');
+  var brand = document.getElementById('brand');
+  var navBack = document.getElementById('back');
   var exitButton = document.getElementById('exit');
   var bottomBar = document.getElementById('bottombar');
-  var lead = document.getElementById('lead');
   var cta = document.getElementById('cta');
   var ctaLabel = document.getElementById('cta-label');
   var ctaIcon = document.getElementById('cta-icon');
 
   function cardIcon(name) {
-    return '<div class="card__icon">' + icon(name) + '</div>';
+    return '<span class="card__icon">' + icon(name) + '</span>';
   }
 
-  function shot(card) {
-    if (!card.image) return '';
+  function shot(image, titleId) {
+    if (!image) return '';
     return (
-      '<button class="shot" type="button" data-shot="' + escapeHtml(card.image) + '" aria-label="' + escapeHtml(t('tap_enlarge')) + '">' +
-      '<img src="' + escapeHtml(card.image) + '" alt="' + escapeHtml(t(card.title)) + '" decoding="async">' +
+      '<button class="shot" type="button" data-shot="' + escapeHtml(image) + '" aria-label="' + escapeHtml(t('tap_enlarge')) + '">' +
+      '<img src="' + escapeHtml(image) + '" alt="' + escapeHtml(titleId ? t(titleId) : '') + '" decoding="async" loading="lazy">' +
       '<span class="shot__hint">' + icon('zoom-in') + escapeHtml(t('tap_zoom')) + '</span>' +
       '</button>'
     );
   }
 
-  function renderBody(page) {
-    if (page.layout === 'grid') {
-      return (
-        '<div class="grid">' +
-        page.cards
-          .map(function (card) {
-            return '<article class="card">' + cardIcon(card.icon) + '<h3 class="card__title">' + escapeHtml(t(card.title)) + '</h3></article>';
-          })
-          .join('') +
-        '</div>'
-      );
-    }
-
-    if (page.layout === 'steps') {
-      return (
-        '<div class="steps">' +
-        page.cards
-          .map(function (card) {
-            return (
-              '<article class="card">' +
-              '<div class="step__body">' +
-              '<div class="step__head">' +
-              cardIcon(card.icon) +
-              '<div><h3 class="card__title">' + escapeHtml(t(card.title)) + '</h3>' +
-              '<p class="card__desc">' + escapeHtml(t(card.desc)) + '</p></div>' +
-              '</div>' +
-              shot(card) +
-              '</div>' +
-              '</article>'
-            );
-          })
-          .join('') +
-        '</div>'
-      );
-    }
-
+  function renderOptions(block) {
+    var items = visible(block.items);
+    if (!items.length) return '';
     return (
-      '<div class="list">' +
-      page.cards
-        .map(function (card) {
+      (block.label ? '<p class="options__label">' + escapeHtml(t(block.label)) + '</p>' : '') +
+      '<div class="options">' +
+      items
+        .map(function (item) {
           return (
-            '<article class="card">' +
-            cardIcon(card.icon) +
-            '<div><h3 class="card__title">' + escapeHtml(t(card.title)) + '</h3>' +
-            (card.desc ? '<p class="card__desc">' + escapeHtml(t(card.desc)) + '</p>' : '') +
-            '</div></article>'
+            '<button class="option" type="button" data-go="' + escapeHtml(item.go) + '">' +
+            cardIcon(item.icon) +
+            '<span class="option__text">' +
+            '<span class="option__title card__title">' + escapeHtml(t(item.title)) + '</span>' +
+            (item.desc ? '<span class="card__desc">' + escapeHtml(t(item.desc)) + '</span>' : '') +
+            '</span>' +
+            '<span class="option__go">' + icon('chevron') + '</span>' +
+            '</button>'
           );
         })
         .join('') +
@@ -198,222 +288,276 @@
     );
   }
 
-  function renderPage(page, index) {
+  function renderTrust(block) {
+    return (
+      '<section class="trust">' +
+      '<h3 class="trust__head">' + icon(block.icon || 'shield-check') + '<span>' + escapeHtml(t(block.title)) + '</span></h3>' +
+      block.items
+        .map(function (item) {
+          return (
+            '<div class="trust__item">' +
+            icon(item.icon) +
+            '<div><p class="trust__title">' + escapeHtml(t(item.title)) + '</p>' +
+            '<p class="trust__desc">' + escapeHtml(t(item.desc)) + '</p></div>' +
+            '</div>'
+          );
+        })
+        .join('') +
+      '</section>'
+    );
+  }
+
+  function renderVideo(block) {
+    // Hidden until the file is known to be there; see findVideos().
+    var src = videoSrc(block);
+    if (!src || videos[src] === false) return '';
+    return (
+      '<div class="video" data-src="' + escapeHtml(src) + '"' + (videos[src] === true ? '' : ' hidden') + '>' +
+      '<button class="video__button" type="button" data-video="1">' +
+      '<span class="video__play">' + icon('play') + '</span>' +
+      '<span class="option__text">' +
+      '<span class="video__title">' + escapeHtml(t('watch_video')) + '</span>' +
+      '<span class="card__desc">' + escapeHtml(t('watch_video_desc')) + '</span>' +
+      '</span>' +
+      '</button>' +
+      '</div>'
+    );
+  }
+
+  function renderSteps(block) {
+    return (
+      '<ol class="steps">' +
+      block.items
+        .map(function (item, i) {
+          return (
+            '<li class="step">' +
+            '<span class="step__num">' + (i + 1) + '</span>' +
+            '<div class="step__body">' +
+            '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3>' +
+            (item.desc ? '<p class="card__desc">' + escapeHtml(t(item.desc)) + '</p>' : '') +
+            shot(item.image, item.title) +
+            '</div>' +
+            '</li>'
+          );
+        })
+        .join('') +
+      '</ol>'
+    );
+  }
+
+  function renderList(block) {
+    return (
+      '<div class="list">' +
+      block.items
+        .map(function (item) {
+          return (
+            '<article class="card">' +
+            cardIcon(item.icon) +
+            '<div class="list__text">' +
+            '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3>' +
+            (item.desc ? '<p class="card__desc">' + escapeHtml(t(item.desc)) + '</p>' : '') +
+            shot(item.image, item.title) +
+            '</div>' +
+            '</article>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderGrid(block) {
+    return (
+      '<div class="grid">' +
+      block.items
+        .map(function (item) {
+          return '<article class="card">' + cardIcon(item.icon) + '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3></article>';
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderNote(block) {
+    return (
+      '<div class="note">' +
+      icon(block.icon || 'bulb') +
+      '<div><p class="note__title">' + escapeHtml(t(block.title)) + '</p>' +
+      '<p class="note__desc">' + escapeHtml(t(block.desc)) + '</p></div>' +
+      '</div>'
+    );
+  }
+
+  function renderDone() {
+    return (
+      '<div class="done"><button class="cta" type="button" data-done="1">' +
+      '<span>' + escapeHtml(t('got_it')) + '</span>' + icon('check') +
+      '</button></div>'
+    );
+  }
+
+  function renderBlock(block) {
+    if (!applies(block)) return '';
+    switch (block.type) {
+      case 'options': return renderOptions(block);
+      case 'trust': return renderTrust(block);
+      case 'video': return renderVideo(block);
+      case 'steps': return renderSteps(block);
+      case 'list': return renderList(block);
+      case 'grid': return renderGrid(block);
+      case 'shot': return '<div class="block--shot">' + shot(block.image, block.title) + '</div>';
+      case 'note': return renderNote(block);
+      case 'done': return renderDone();
+      default: return '';
+    }
+  }
+
+  function renderScreen(id, def) {
     var section = document.createElement('section');
-    section.className = 'page';
-    section.setAttribute('data-tone', page.tone || 'primary');
-    section.setAttribute('data-index', String(index));
-    section.setAttribute('aria-label', t(page.title));
+    section.className = 'screen';
+    section.setAttribute('data-tone', def.tone || 'primary');
+    section.setAttribute('data-screen', id);
+    section.setAttribute('aria-label', t(def.title));
     section.innerHTML =
-      '<div class="page__inner">' +
-      '<div class="page__header">' +
-      '<div class="page__badge">' + icon(page.icon) + '</div>' +
-      '<span class="page__kicker">' + escapeHtml(t(page.kicker)) + '</span>' +
-      '<h2 class="page__title">' + escapeHtml(t(page.title)) + '</h2>' +
-      '<p class="page__subtitle">' + escapeHtml(t(page.subtitle)) + '</p>' +
-      '</div>' +
-      '<div class="page__body">' + renderBody(page) + '</div>' +
+      '<div class="screen__inner">' +
+      '<header class="screen__header">' +
+      (def.icon ? '<div class="screen__badge">' + icon(def.icon) + '</div>' : '') +
+      (def.kicker ? '<span class="screen__kicker">' + escapeHtml(t(def.kicker)) + '</span>' : '') +
+      '<h2 class="screen__title">' + escapeHtml(t(def.title)) + '</h2>' +
+      (def.subtitle ? '<p class="screen__subtitle">' + escapeHtml(t(def.subtitle)) + '</p>' : '') +
+      '</header>' +
+      '<div class="screen__body">' + (def.blocks || []).map(renderBlock).join('') + '</div>' +
       '</div>';
+
+    // A screenshot that never arrives leaves the step without a hole in it.
+    Array.prototype.forEach.call(section.querySelectorAll('.shot img'), function (img) {
+      img.addEventListener('error', function () {
+        remove(img.closest ? img.closest('.shot') : img.parentNode);
+      });
+    });
     return section;
   }
 
-  function build() {
-    document.documentElement.lang = lang;
-    document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
-    document.title = t('guide_title');
+  // ── Moving between screens ──────────────────────────────────────────────
 
-    document.getElementById('brand-name').textContent = window.GUIDE_APP_NAME || 'InvisChat';
+  var stack = [];
 
-    var fragment = document.createDocumentFragment();
-    pages.forEach(function (page, index) {
-      fragment.appendChild(renderPage(page, index));
-    });
-    deck.appendChild(fragment);
+  // One slide at a time. Two taps on the same card while it is still opening
+  // would otherwise stack the same screen twice, and the way back with it.
+  var sliding = false;
 
-    // Screenshots further along load only when they are approached — the first
-    // page has to be instant, the rest can wait for the swipe.
-    Array.prototype.forEach.call(deck.querySelectorAll('.page'), function (section, index) {
-      if (index === 0) return;
-      Array.prototype.forEach.call(section.querySelectorAll('.shot img'), function (img) {
-        img.loading = 'lazy';
-      });
-    });
+  function startSliding() {
+    sliding = true;
+    window.setTimeout(function () { sliding = false; }, TRANSITION);
+  }
 
-    // A screenshot that never arrives leaves the card without a hole in it.
-    Array.prototype.forEach.call(deck.querySelectorAll('.shot img'), function (img) {
-      img.addEventListener('error', function () {
-        var button = img.closest('.shot');
-        if (button) button.remove();
-      });
-    });
-
-    progress.innerHTML = pages
-      .map(function () { return '<span class="progress__seg"></span>'; })
-      .join('');
-
-    exitButton.hidden = !Bridge.available;
-    if (isOnboarding) {
-      exitButton.innerHTML = '<span>' + escapeHtml(t('skip')) + '</span>';
-      exitButton.setAttribute('aria-label', t('skip'));
-    } else {
-      exitButton.innerHTML = icon('close');
-      exitButton.setAttribute('aria-label', t('done'));
+  function push(id, animate) {
+    var def = screenDef(id);
+    if (!def) return false;
+    if (animate !== false) {
+      if (sliding) return false;
+      startSliding();
     }
 
-    document.getElementById('swipe-text').textContent = t('swipe_hint');
-    document.getElementById('back-label').textContent = t('back');
-    document.getElementById('lightbox-hint-text').textContent = t('pinch_hint');
-    document.getElementById('lightbox-close').setAttribute('aria-label', t('done'));
-    document.getElementById('app').classList.remove('is-loading');
-  }
-
-  // ── The deck ────────────────────────────────────────────────────────────
-
-  var index = 0;
-  var sections = [];
-  var headers = [];
-  var bodies = [];
-  // Right-to-left scrolling reports negative offsets in current browsers and
-  // reversed positive ones in a few old WebViews. Probed once, on the first
-  // page, where the two are told apart by whether the deck starts at zero.
-  var legacyRtl = false;
-
-  function pageWidth() {
-    return deck.clientWidth || 1;
-  }
-
-  function scrollPosition() {
-    var offset = deck.scrollLeft;
-    if (legacyRtl) return (deck.scrollWidth - deck.clientWidth - offset) / pageWidth();
-    return Math.abs(offset) / pageWidth();
-  }
-
-  function scrollTargetFor(i) {
-    if (legacyRtl) return deck.scrollWidth - deck.clientWidth - i * pageWidth();
-    return dirSign * i * pageWidth();
-  }
-
-  function goTo(i, smooth) {
-    var target = Math.max(0, Math.min(pages.length - 1, i));
-    deck.scrollTo({ left: scrollTargetFor(target), behavior: smooth === false ? 'auto' : 'smooth' });
-  }
-
-  function clamp(value, min, max) {
-    return value < min ? min : value > max ? max : value;
-  }
-
-  /** Header and body drift against the swipe, at different speeds. */
-  function paint() {
-    var position = scrollPosition();
-    for (var i = 0; i < sections.length; i++) {
-      var drift = clamp(position - i, -1, 1);
-      var faded = 1 - Math.abs(drift);
-      sections[i].style.opacity = faded < 0 ? 0 : faded;
-      headers[i].style.transform = 'translate3d(' + (-drift * 28 * dirSign).toFixed(2) + 'px,0,0)';
-      bodies[i].style.transform = 'translate3d(' + (-drift * 64 * dirSign).toFixed(2) + 'px,0,0)';
+    var below = stack[stack.length - 1];
+    var el = renderScreen(id, def);
+    if (animate !== false) el.classList.add('is-ahead');
+    deck.appendChild(el);
+    if (animate !== false) {
+      void el.offsetWidth; // land the start pose, then animate away from it
+      el.classList.remove('is-ahead');
     }
+
+    if (below) {
+      below.el.classList.add('is-behind');
+      // Out of the way, and then out of the reading order altogether.
+      below.timer = window.setTimeout(function () { below.el.classList.add('is-hidden'); }, TRANSITION);
+    }
+
+    stack.push({ id: id, el: el });
+    onScreenChanged();
+    return true;
   }
 
-  /** Which page the deck has settled on. Read straight from the scroll event
-      rather than from the paint below it: animation frames are throttled while
-      the app is in the background, and the progress bar — and the app, which
-      steers its back gesture by this — must not fall behind. */
-  function syncIndex() {
-    var current = Math.round(scrollPosition());
-    if (current === index || current < 0 || current >= pages.length) return;
-    index = current;
-    onIndexChanged();
+  function pop() {
+    if (stack.length < 2 || sliding) return false;
+    startSliding();
+    var top = stack.pop();
+    var below = stack[stack.length - 1];
+
+    window.clearTimeout(below.timer);
+    below.el.classList.remove('is-hidden', 'is-behind');
+    top.el.classList.add('is-ahead');
+    window.setTimeout(function () { remove(top.el); }, TRANSITION);
+
+    onScreenChanged();
+    return true;
   }
 
-  function onIndexChanged() {
-    var last = index === pages.length - 1;
-
-    Array.prototype.forEach.call(progress.children, function (segment, i) {
-      segment.classList.toggle('is-on', i <= index);
-    });
-
-    bottomBar.classList.toggle('is-last', last);
-    lead.classList.toggle('is-first', index === 0);
-    document.getElementById('swipe').hidden = index !== 0;
-    document.getElementById('back').hidden = index === 0;
-
-    ctaLabel.textContent = last ? (isOnboarding ? t('get_started') : t('done')) : t('next');
-    ctaIcon.innerHTML = ICONS[last ? 'check' : 'arrow'];
-    ctaIcon.classList.toggle('is-directional', !last);
-    // Nothing to skip past on the closing page — the button below is the only
-    // sensible action there.
-    exitButton.classList.toggle('is-muted', isOnboarding && last);
-
-    Bridge.post({ type: 'page', index: index, last: last, total: pages.length });
+  /** Straight back to the question, however deep the user went. */
+  function goHome() {
+    if (sliding) return false;
+    while (stack.length > 2) {
+      var middle = stack.splice(stack.length - 2, 1)[0];
+      window.clearTimeout(middle.timer);
+      remove(middle.el);
+    }
+    return pop();
   }
 
-  var painting = false;
-  function schedulePaint() {
-    if (painting) return;
-    painting = true;
-    requestAnimationFrame(function () {
-      painting = false;
-      paint();
-    });
+  function onScreenChanged() {
+    var atHome = stack.length <= 1;
+    brand.hidden = !atHome;
+    navBack.hidden = atHome;
+    bottomBar.hidden = !atHome;
+
+    // `index` is how deep the user is, which is what the app steers its back
+    // gesture by. `last` is answered in finish(), below.
+    Bridge.post({ type: 'page', index: stack.length - 1, last: false, total: total });
   }
 
   function finish(reason) {
-    Bridge.post({ type: 'finish', reason: reason, index: index });
+    // The app logs the walkthrough as completed on a page that reports itself
+    // the last one. Nothing is last in a guide the user steers, so the moment
+    // that counts is closing it on the button — never a skip, which is not a
+    // walkthrough completed. The index has to differ from the one the app saw
+    // last for it to read `last` at all.
+    if (reason !== 'skip') Bridge.post({ type: 'page', index: stack.length, last: true, total: total });
+    Bridge.post({ type: 'finish', reason: reason, index: stack.length - 1 });
   }
 
-  function next() {
-    if (index >= pages.length - 1) {
-      finish('cta');
-      return false;
-    }
-    goTo(index + 1);
-    return true;
-  }
+  // ── Wiring ──────────────────────────────────────────────────────────────
 
-  function previous() {
-    if (index <= 0) return false;
-    goTo(index - 1);
-    return true;
-  }
+  function wire() {
+    deck.addEventListener('click', function (event) {
+      var target = event.target;
+      if (!target || !target.closest) return;
 
-  function wireDeck() {
-    sections = Array.prototype.slice.call(deck.querySelectorAll('.page'));
-    headers = sections.map(function (section) { return section.querySelector('.page__header'); });
-    bodies = sections.map(function (section) { return section.querySelector('.page__body'); });
+      var picture = target.closest('.shot');
+      if (picture) { lightbox.open(picture); return; }
 
-    if (isRtl && deck.scrollLeft > 1) legacyRtl = true;
+      var option = target.closest('[data-go]');
+      if (option) { push(option.getAttribute('data-go')); return; }
 
-    deck.addEventListener('scroll', function () {
-      syncIndex();
-      schedulePaint();
-    }, { passive: true });
-    window.addEventListener('resize', function () {
-      goTo(index, false);
-      schedulePaint();
+      var video = target.closest('[data-video]');
+      if (video) { playVideo(video); return; }
+
+      if (target.closest('[data-done]')) goHome();
     });
 
-    cta.addEventListener('click', function () { next(); });
-    document.getElementById('back').addEventListener('click', function () { previous(); });
+    navBack.addEventListener('click', function () { pop(); });
     exitButton.addEventListener('click', function () { finish('skip'); });
+    cta.addEventListener('click', function () { finish('cta'); });
 
     document.addEventListener('keydown', function (event) {
       if (lightbox.isOpen()) {
         if (event.key === 'Escape') lightbox.close();
         return;
       }
-      if (event.key === 'ArrowRight') isRtl ? previous() : next();
-      else if (event.key === 'ArrowLeft') isRtl ? next() : previous();
-      else if (event.key === 'Escape' && Bridge.available) finish('skip');
+      if (event.key === 'Escape') {
+        if (!pop() && Bridge.available) finish('skip');
+      }
     });
-
-    deck.addEventListener('click', function (event) {
-      var button = event.target.closest ? event.target.closest('.shot') : null;
-      if (button) lightbox.open(button);
-    });
-
-    goTo(0, false);
-    onIndexChanged();
-    paint();
   }
 
   // ── Full-screen screenshot: pinch, drag, double-tap ─────────────────────
@@ -657,25 +801,63 @@
   // ── What Flutter can call ───────────────────────────────────────────────
 
   window.Guide = {
-    next: next,
+    // The system back gesture: the picture first, then the way back.
     previous: function () {
       if (lightbox.isOpen()) {
         lightbox.close();
         return true;
       }
-      return previous();
+      return pop();
     },
-    goTo: function (i) { goTo(i); },
     closeImage: function () { lightbox.close(); },
+    goTo: function (id) { return typeof id === 'string' ? push(id) : false; },
+    home: goHome,
     setTheme: function (theme) { applyTheme(theme); },
     getState: function () {
-      return { index: index, total: pages.length, last: index === pages.length - 1 };
+      var top = stack[stack.length - 1];
+      return { index: stack.length - 1, screen: top ? top.id : null, total: total, last: false, platform: platform };
     },
+    // Kept for app versions that predate the screens; there is no next any more.
+    next: function () { return false; },
   };
 
   // ── Go ──────────────────────────────────────────────────────────────────
 
+  function build() {
+    document.documentElement.lang = lang;
+    document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
+    document.title = t('guide_title');
+
+    document.getElementById('brand-name').textContent = APP_NAME;
+    document.getElementById('back-label').textContent = t('back');
+    document.getElementById('lightbox-hint-text').textContent = t('pinch_hint');
+    document.getElementById('lightbox-close').setAttribute('aria-label', t('done'));
+
+    exitButton.hidden = !Bridge.available;
+    if (isOnboarding) {
+      exitButton.innerHTML = '<span>' + escapeHtml(t('skip')) + '</span>';
+      exitButton.setAttribute('aria-label', t('skip'));
+    } else {
+      exitButton.innerHTML = icon('close');
+      exitButton.setAttribute('aria-label', t('done'));
+    }
+
+    ctaLabel.textContent = isOnboarding ? t('get_started') : t('done');
+    ctaIcon.innerHTML = ICONS[isOnboarding ? 'arrow' : 'check'];
+    ctaIcon.classList.toggle('is-directional', isOnboarding);
+
+    app.classList.remove('is-loading');
+  }
+
   build();
-  wireDeck();
-  Bridge.post({ type: 'ready', total: pages.length, index: 0, lang: lang });
+  findVideos();
+  wire();
+  push(HOME, false);
+
+  // A support link can open the guide straight on the screen it is about, with
+  // home still behind it to go back to.
+  var deepLink = params.get('screen');
+  if (deepLink && deepLink !== HOME) push(deepLink, false);
+
+  Bridge.post({ type: 'ready', total: total, index: stack.length - 1, lang: lang, platform: platform });
 })();

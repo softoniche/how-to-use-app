@@ -30,7 +30,7 @@
   --info-soft: #ebf5ff;
   --info-rgb: 61, 143, 230;
 
-  /* Set per page from its tone, then used by everything inside it. The rgb
+  /* Set per screen from its tone, then used by everything inside it. The rgb
      triplet is what the translucent pills and borders are mixed from — spelled
      out rather than colour-mixed, which older WebViews do not understand. */
   --accent: var(--primary);
@@ -42,8 +42,13 @@
   --radius-tile: 20px;
   --page-max: 640px;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* Which way "forward" is. Screens slide in from the end of the line, so in
+     Arabic they come from the left. */
+  --dir: 1;
   color-scheme: light;
 }
+
+:root[dir='rtl'] { --dir: -1; }
 
 :root[data-theme='dark'] {
   --surface: #000000;
@@ -135,15 +140,39 @@ svg { display: block; }
 .app.is-loading { opacity: 0; }
 .app { opacity: 1; transition: opacity 0.25s ease; }
 
-/* ── Top bar: brand, exit, progress ─────────────────────────────────────── */
+/* ── Top bar ────────────────────────────────────────────────────────────── */
 
-.topbar { flex: none; padding: 12px 20px 0; }
+.topbar { flex: none; padding: 12px 20px 4px; }
 
-.topbar__row { display: flex; align-items: center; gap: 10px; }
+.topbar__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
 
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .brand__logo { width: 30px; height: 30px; border-radius: 9px; display: block; }
 .brand__name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+
+/* On an inner screen the brand steps aside for the way back, so the row keeps
+   its height and nothing shifts sideways. */
+.navback {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-inline-start: -10px;
+  border-radius: 12px;
+  font-size: 15px;
+  font-weight: 600;
+  transition: background-color 0.15s ease;
+}
+.navback:active { background: var(--surface-variant-low); }
+.navback .icon { width: 20px; height: 20px; transform: scaleX(-1); }
+[dir='rtl'] .navback .icon { transform: none; }
 
 .exit {
   margin-inline-start: auto;
@@ -156,77 +185,58 @@ svg { display: block; }
   font-weight: 600;
   padding: 8px 10px;
   border-radius: 12px;
-  transition: opacity 0.2s ease, background-color 0.15s ease;
+  transition: background-color 0.15s ease;
 }
 .exit:active { background: var(--surface-variant-low); }
 .exit .icon { width: 22px; height: 22px; }
-.exit[hidden] { display: none; }
-/* Faded rather than removed on the last page: taking it out would shift the row. */
-.exit.is-muted { opacity: 0; pointer-events: none; }
 
-.progress { display: flex; gap: 6px; margin-top: 16px; }
-.progress__seg {
-  flex: 1;
-  height: 4px;
-  border-radius: 3px;
-  background: var(--outline);
-  transition: background-color 0.32s var(--ease);
-}
-.progress__seg.is-on { background: var(--primary); }
-
-/* ── The deck ───────────────────────────────────────────────────────────── */
+/* ── The screens ────────────────────────────────────────────────────────── */
 
 .deck {
+  position: relative;
   flex: 1;
   min-height: 0;
-  display: flex;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
+  overflow: hidden;
 }
-.deck::-webkit-scrollbar { display: none; }
 
-.page {
-  flex: 0 0 100%;
-  width: 100%;
-  height: 100%;
-  scroll-snap-align: center;
-  scroll-snap-stop: always;
+.screen {
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  transition: transform 0.34s var(--ease), opacity 0.34s var(--ease);
+  will-change: transform, opacity;
 }
+/* Parked one screen ahead: where a screen comes from, and where it goes back
+   to. `is-behind` is the screen underneath, pushed a little the other way. */
+.screen.is-ahead { transform: translate3d(calc(var(--dir) * 100%), 0, 0); opacity: 0; }
+.screen.is-behind { transform: translate3d(calc(var(--dir) * -22%), 0, 0); opacity: 0; pointer-events: none; }
+.screen.is-hidden { visibility: hidden; }
 
-.page__inner {
+.screen__inner {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 24px 20px 28px;
+  padding: 20px 20px 28px;
 }
 
-/* Header and body drift at different speeds while the deck is dragged, which
-   is what makes the pages read as cards rather than as a slideshow. */
-.page__header,
-.page__body { will-change: transform; }
+/* ── Screen header ──────────────────────────────────────────────────────── */
 
-/* ── Page header ────────────────────────────────────────────────────────── */
-
-.page__badge {
-  width: 62px;
-  height: 62px;
+.screen__badge {
+  width: 56px;
+  height: 56px;
   display: grid;
   place-items: center;
-  border-radius: 20px;
+  border-radius: 18px;
   background: var(--accent-soft);
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   color: var(--accent-bold);
+  margin-bottom: 16px;
 }
-.page__badge .icon { width: 30px; height: 30px; }
+.screen__badge .icon { width: 27px; height: 27px; }
 
-.page__kicker {
+.screen__kicker {
   display: inline-block;
-  margin-top: 18px;
   padding: 4px 11px;
   border-radius: 20px;
   background: rgba(var(--accent-rgb), 0.16);
@@ -237,22 +247,22 @@ svg { display: block; }
   text-transform: uppercase;
 }
 
-.page__title {
+.screen__title {
   margin: 12px 0 0;
-  font-size: 24px;
-  line-height: 1.2;
+  font-size: 25px;
+  line-height: 1.22;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 
-.page__subtitle {
+.screen__subtitle {
   margin: 10px 0 0;
   font-size: 16px;
   line-height: 1.5;
   color: var(--on-surface-variant);
 }
 
-.page__body { margin-top: 24px; }
+.screen__body { margin-top: 22px; }
 
 /* ── Cards ──────────────────────────────────────────────────────────────── */
 
@@ -278,11 +288,167 @@ svg { display: block; }
 .card__title { font-size: 16px; font-weight: 600; margin: 0; }
 .card__desc { margin: 3px 0 0; font-size: 14px; line-height: 1.45; color: var(--on-surface-variant); }
 
-/* list — icon + title + description rows */
+/* ── Options: the questions the guide answers ───────────────────────────── */
+
+.options { display: flex; flex-direction: column; gap: 12px; }
+
+.options__label {
+  margin: 26px 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant-low);
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: start;
+  padding: 15px 16px;
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-tile);
+  box-shadow: var(--shadow);
+  transition: transform 0.14s ease, border-color 0.15s ease;
+}
+.option:active { transform: scale(0.985); border-color: rgba(var(--accent-rgb), 0.55); }
+.option .card__icon { width: 46px; height: 46px; border-radius: 14px; }
+.option .card__icon .icon { width: 24px; height: 24px; }
+.option__text { min-width: 0; }
+/* The label and its line are spans inside a button, so they need telling. */
+.option__text > span { display: block; }
+.option__title { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+
+.option__go { flex: none; margin-inline-start: auto; color: var(--on-surface-variant-low); }
+.option__go .icon { width: 20px; height: 20px; }
+[dir='rtl'] .option__go .icon { transform: scaleX(-1); }
+
+/* ── The promise: what the app does not do ──────────────────────────────── */
+
+.trust {
+  margin-top: 28px;
+  padding: 16px;
+  border-radius: var(--radius-card);
+  background: rgba(var(--success-rgb), 0.07);
+  border: 1px solid rgba(var(--success-rgb), 0.25);
+}
+
+.trust__head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--success-bold);
+  font-size: 14px;
+  font-weight: 700;
+}
+.trust__head .icon { flex: none; width: 19px; height: 19px; }
+
+.trust__item { display: flex; gap: 10px; margin-top: 15px; }
+.trust__item .icon { flex: none; width: 17px; height: 17px; margin-top: 2px; color: var(--success-bold); }
+.trust__title { margin: 0; font-size: 14px; font-weight: 600; }
+.trust__desc { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--on-surface-variant); }
+
+/* ── Watch the video ────────────────────────────────────────────────────── */
+
+.video { margin-bottom: 22px; }
+
+.video__button {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: start;
+  padding: 13px 16px 13px 13px;
+  padding-inline: 13px 16px;
+  border-radius: var(--radius-tile);
+  background: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  transition: transform 0.14s ease;
+}
+.video__button:active { transform: scale(0.985); }
+
+.video__play {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--accent);
+  color: var(--on-primary);
+}
+.video__play .icon { width: 22px; height: 22px; fill: currentColor; margin-inline-start: 2px; }
+
+.video__title { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+
+.video__player {
+  border-radius: var(--radius-tile);
+  overflow: hidden;
+  border: 1px solid var(--outline);
+  background: #000;
+}
+.video__player video {
+  display: block;
+  width: 100%;
+  max-height: 520px;
+  max-height: min(58dvh, 520px);
+  background: #000;
+}
+
+.video__error {
+  padding: 14px 16px;
+  border-radius: var(--radius-tile);
+  background: var(--surface-variant-low);
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  text-align: center;
+}
+
+/* ── Steps: numbered, tied together by a thread ─────────────────────────── */
+
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+
+.step { position: relative; display: flex; gap: 14px; }
+/* The line to the next step, behind its number. */
+.step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 34px;
+  bottom: -24px;
+  inset-inline-start: 14px;
+  width: 1.5px;
+  background: var(--outline);
+}
+
+.step__num {
+  position: relative;
+  flex: none;
+  width: 29px;
+  height: 29px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  color: var(--accent-bold);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.step__body { min-width: 0; padding-top: 3px; }
+.step__body .card__title { font-size: 15.5px; font-weight: 700; }
+
+/* ── List: icon + title + description rows ──────────────────────────────── */
+
 .list { display: flex; flex-direction: column; gap: 12px; }
 .list .card { display: flex; gap: 13px; padding: 15px; align-items: flex-start; }
+.list__text { min-width: 0; }
 
-/* grid — two-column tiles, icon and title only */
+/* ── Grid: small tiles, icon and title only ─────────────────────────────── */
+
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 .grid .card { padding: 14px; border-radius: var(--radius-tile); }
 .grid .card__icon { width: 36px; height: 36px; border-radius: 11px; }
@@ -291,11 +457,7 @@ svg { display: block; }
    one-line title and a two-line one still line up across the row. */
 .grid .card__title { margin-top: 12px; font-size: 14px; line-height: 1.25; }
 
-/* steps — numbered instruction cards with a screenshot */
-.steps { display: flex; flex-direction: column; gap: 14px; }
-.steps .card { padding: 15px; border-radius: var(--radius-tile); }
-.step__head { display: flex; gap: 13px; align-items: flex-start; }
-.step__head .card__title { font-size: 15px; font-weight: 700; }
+/* ── Screenshots ────────────────────────────────────────────────────────── */
 
 .shot {
   position: relative;
@@ -335,28 +497,31 @@ svg { display: block; }
 }
 .shot__hint .icon { width: 15px; height: 15px; }
 
-/* ── Bottom bar ─────────────────────────────────────────────────────────── */
+/* A screenshot on its own, under the steps it illustrates. */
+.block--shot .shot { margin-top: 22px; }
 
-.bottombar {
-  flex: none;
+/* ── The closing tip ────────────────────────────────────────────────────── */
+
+.note {
   display: flex;
-  align-items: center;
   gap: 12px;
-  padding: 8px 20px 16px;
-  max-width: var(--page-max);
-  width: 100%;
-  margin: 0 auto;
+  margin-top: 22px;
+  padding: 14px 15px;
+  border-radius: var(--radius-card);
+  background: var(--surface-variant-low);
 }
+.note .icon { flex: none; width: 20px; height: 20px; margin-top: 1px; color: var(--on-surface-variant); }
+.note__title { margin: 0; font-size: 14px; font-weight: 700; }
+.note__desc { margin: 3px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--on-surface-variant); }
 
-.bottombar__lead { flex: 1; min-width: 0; display: flex; }
-.bottombar.is-last .bottombar__lead { display: none; }
-.bottombar.is-last .cta { flex: 1; }
+/* ── Buttons ────────────────────────────────────────────────────────────── */
 
 .cta {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+  width: 100%;
   padding: 16px 26px;
   border-radius: 16px;
   background: var(--primary);
@@ -368,43 +533,19 @@ svg { display: block; }
 .cta:active { transform: scale(0.97); filter: brightness(0.95); }
 .cta .icon { width: 19px; height: 19px; stroke-width: 2; }
 
-.back {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 12px;
-  border-radius: 12px;
-  color: var(--on-surface-variant);
-  font-size: 14px;
-  font-weight: 600;
-}
-.back:active { background: var(--surface-variant-low); }
-.back .icon { width: 18px; height: 18px; transform: scaleX(-1); }
+/* The way back to the question, at the end of what the user came to read. */
+.done { margin-top: 28px; }
+.done .cta { background: var(--surface-container); color: var(--on-surface); border: 1px solid var(--outline); }
+.done .cta .icon { color: var(--primary); }
 
-/* A gentle nudge, shown only on the first page, that the deck is swipeable. */
-.swipe { display: flex; align-items: center; gap: 6px; padding: 14px 2px; min-width: 0; }
-.swipe__text {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--on-surface-variant-low);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.bottombar {
+  flex: none;
+  display: flex;
+  padding: 8px 20px 16px;
+  max-width: var(--page-max);
+  width: 100%;
+  margin: 0 auto;
 }
-.swipe__chevrons { display: flex; color: var(--primary); }
-.swipe__chevrons .icon { width: 18px; height: 18px; animation: drift 1.4s linear infinite; }
-.swipe__chevrons .icon:last-child { animation-delay: -0.46s; }
-@keyframes drift {
-  from { transform: translateX(0); opacity: 0.9; }
-  to { transform: translateX(8px); opacity: 0; }
-}
-
-/* Right-to-left languages swipe the other way, so everything that points at
-   the next page has to point — and drift — the other way too. The tick on the
-   closing page is not directional and stays as it is. */
-[dir='rtl'] .cta .icon.is-directional { transform: scaleX(-1); }
-[dir='rtl'] .back .icon { transform: none; }
-[dir='rtl'] .swipe__chevrons { transform: scaleX(-1); }
 
 /* ── Full-screen screenshot ─────────────────────────────────────────────── */
 
@@ -472,17 +613,18 @@ svg { display: block; }
 @media (min-width: 600px) {
   body { font-size: 16px; }
   :root { --page-max: 700px; }
-  .topbar { padding: 18px 28px 0; }
-  .page__inner { padding: 32px 28px 32px; }
-  .page__badge { width: 72px; height: 72px; border-radius: 24px; }
-  .page__badge .icon { width: 35px; height: 35px; }
-  .page__title { font-size: 30px; }
-  .page__subtitle { font-size: 17px; }
+  .topbar { padding: 18px 28px 4px; }
+  .screen__inner { padding: 26px 28px 32px; }
+  .screen__badge { width: 64px; height: 64px; border-radius: 21px; }
+  .screen__badge .icon { width: 31px; height: 31px; }
+  .screen__title { font-size: 31px; }
+  .screen__subtitle { font-size: 17px; }
   .bottombar { padding: 12px 28px 22px; }
   .grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
   .grid .card__title { font-size: 15px; }
   .card__title { font-size: 17px; }
   .card__desc { font-size: 15px; }
+  .option__title { font-size: 17px; }
   .brand__logo { width: 34px; height: 34px; border-radius: 10px; }
   .brand__name { font-size: 18px; }
   .shot img { max-height: 400px; max-height: min(38dvh, 420px); }
@@ -490,28 +632,31 @@ svg { display: block; }
 
 @media (min-width: 900px) {
   :root { --page-max: 860px; }
-  .page__title { font-size: 34px; }
-  .page__inner { padding: 44px 36px 36px; }
+  .screen__title { font-size: 34px; }
+  .screen__inner { padding: 36px 36px 36px; }
   .grid { grid-template-columns: repeat(4, 1fr); }
+  .options { flex-direction: row; }
+  .options .option { flex: 1; }
   /* Roomy enough to read the instruction beside its screenshot. */
-  .steps .card { padding: 18px; }
-  .step__body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: center; }
-  .step__body .shot { margin-top: 0; }
+  .list .card { padding: 18px; }
   .shot img { max-height: 440px; max-height: min(46dvh, 460px); }
 }
 
 /* Landscape phones have no room for the full header. */
 @media (max-height: 480px) and (max-width: 900px) {
-  .page__badge { width: 46px; height: 46px; border-radius: 15px; }
-  .page__badge .icon { width: 24px; height: 24px; }
-  .page__kicker { margin-top: 12px; }
-  .page__title { font-size: 20px; }
-  .page__subtitle { font-size: 14px; }
-  .page__body { margin-top: 16px; }
-  .page__inner { padding: 14px 20px 20px; }
+  .screen__badge { width: 44px; height: 44px; border-radius: 14px; margin-bottom: 12px; }
+  .screen__badge .icon { width: 23px; height: 23px; }
+  .screen__title { font-size: 20px; }
+  .screen__subtitle { font-size: 14px; }
+  .screen__body { margin-top: 16px; }
+  .screen__inner { padding: 14px 20px 20px; }
   .cta { padding: 12px 20px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
 }
+
+/* Right-to-left languages read the other way, so the arrow that points onwards
+   points — and moves — the other way too. The tick is not directional. */
+[dir='rtl'] .cta .icon.is-directional { transform: scaleX(-1); }
