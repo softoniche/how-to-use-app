@@ -2,24 +2,27 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <!-- Everything this page needs sits one folder up: it is the same guide,
+         the same stylesheet and the same scripts, opened on one screen. -->
+    <base href="../" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#f8f9fd" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
     <meta name="robots" content="noindex" />
-    <title>How the app works</title>
+    <title>How to connect my account</title>
     <link rel="icon" href="assets/img/logo.png" />
     <link rel="preload" as="image" href="assets/img/logo.png" />
     <link rel="stylesheet" href="assets/css/style.css" />
   </head>
   <body>
-    <!-- The whole guide: the question, and every answer to it. Its frame is
-         drawn by shell.js, its screens by app.js from content.js — see
-         connect-account/index.html for one of those screens on its own. -->
+    <!-- Connecting an account, on a page of its own, for a link that should
+         open there and nowhere else. Nothing is behind it: the way out is out
+         of the page, not back to the question. -->
     <script>
-      // The app's name, shown next to the logo and in the welcome. Kept here so
-      // it can be changed without touching the code.
       window.GUIDE_APP_NAME = 'InvisChat';
+      // The screen this page is. Its id in assets/js/content.js.
+      window.GUIDE_SCREEN = 'connect';
     </script>
     <script src="assets/js/shell.js"></script>
     <script src="assets/js/i18n.js"></script>

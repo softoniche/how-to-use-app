@@ -4,6 +4,12 @@
    The first one asks what the user wants to know; every answer is one tap
    away, and the way back is always the same.
 
+   It answers at more than one address. `/` is the whole guide; a folder of
+   its own — `/connect-account/` — is one screen of it, standing alone, for a
+   link that should open there and nowhere else. Such a page says which screen
+   it is in `window.GUIDE_SCREEN`, and has nothing behind it: leaving it leaves
+   the page rather than falling back to the question.
+
    Query parameters
      lang=en|tr|de|id|es|pt|ar|fr|ms|af|hi   what language to read it in
      full=1|0        1 (default) shows everything, 0 only connecting
@@ -150,6 +156,20 @@
   var total = Object.keys(screens).filter(function (id) {
     return !!screenDef(id);
   }).length;
+
+  /**
+   * The one screen this page is, when it is a page of its own — the id the
+   * HTML declares in `window.GUIDE_SCREEN`. Null on the guide itself, and null
+   * again when this build of the app does not include that screen, which
+   * leaves the whole guide rather than an empty page.
+   */
+  var ownScreen = (function () {
+    var id = window.GUIDE_SCREEN;
+    return typeof id === 'string' && screenDef(id) ? id : null;
+  })();
+
+  /** Where the deck starts: this page's own screen, or the question. */
+  var firstScreen = ownScreen || HOME;
 
   // ── Theme ───────────────────────────────────────────────────────────────
 
@@ -494,7 +514,10 @@
     return true;
   }
 
-  /** Straight back to the question, however deep the user went. */
+  /**
+   * Straight back to the bottom of the deck, however deep the user went: the
+   * question on the guide, this page's own screen on a page of its own.
+   */
   function goHome() {
     if (sliding) return false;
     while (stack.length > 2) {
@@ -506,10 +529,15 @@
   }
 
   function onScreenChanged() {
-    var atHome = stack.length <= 1;
-    brand.hidden = !atHome;
-    navBack.hidden = atHome;
-    bottomBar.hidden = !atHome;
+    // The bottom of the deck: the question on the guide, and on a page of its
+    // own the screen that page is. Either way there is nothing behind it.
+    var atFirst = stack.length <= 1;
+    brand.hidden = !atFirst;
+    navBack.hidden = atFirst;
+    // The button that closes the guide, which only the app can act on. The
+    // walkthrough has always offered it; a page of its own, read in a browser,
+    // has nobody to tell — so it offers nothing to press.
+    bottomBar.hidden = !atFirst || (!!ownScreen && !Bridge.available);
 
     // `index` is how deep the user is, which is what the app steers its back
     // gesture by. `last` is answered in finish(), below.
@@ -522,7 +550,7 @@
     // that counts is closing it on the button — never a skip, which is not a
     // walkthrough completed. The index has to differ from the one the app saw
     // last for it to read `last` at all.
-    if (reason !== 'skip') Bridge.post({ type: 'page', index: stack.length, last: true, total: total });
+    if (reason !== 'skip' && !ownScreen) Bridge.post({ type: 'page', index: stack.length, last: true, total: total });
     Bridge.post({ type: 'finish', reason: reason, index: stack.length - 1 });
   }
 
@@ -826,7 +854,7 @@
   function build() {
     document.documentElement.lang = lang;
     document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
-    document.title = t('guide_title');
+    document.title = ownScreen ? t(screenDef(ownScreen).title) : t('guide_title');
 
     document.getElementById('brand-name').textContent = APP_NAME;
     document.getElementById('back-label').textContent = t('back');
@@ -852,12 +880,12 @@
   build();
   findVideos();
   wire();
-  push(HOME, false);
+  push(firstScreen, false);
 
   // A support link can open the guide straight on the screen it is about, with
-  // home still behind it to go back to.
+  // the first one still behind it to go back to.
   var deepLink = params.get('screen');
-  if (deepLink && deepLink !== HOME) push(deepLink, false);
+  if (deepLink && deepLink !== firstScreen) push(deepLink, false);
 
   Bridge.post({ type: 'ready', total: total, index: stack.length - 1, lang: lang, platform: platform });
 })();

@@ -142,7 +142,10 @@ svg { display: block; }
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
 
-.topbar { flex: none; padding: 12px 20px 4px; }
+/* Tight to the top on a phone, where the browser's own bar is right above it
+   and every pixel of the screen is wanted for reading; tablets get the room
+   back in the 600px block at the bottom. */
+.topbar { flex: none; padding: 6px 20px 4px; }
 
 .topbar__row {
   display: flex;
