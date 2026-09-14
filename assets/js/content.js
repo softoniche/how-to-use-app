@@ -12,14 +12,15 @@
 //   full   true when the screen or option belongs to the full guide only. With
 //          ?full=0 — what the app asks for when its extra features are switched
 //          off — everything marked `full` disappears, leaving connecting.
-//   platform  'android' or 'ios' on a block or an option, when it applies to
-//          only one of them. In a video path, {platform} is filled in instead,
-//          so the two phones are shown their own recording.
+//   platform  'android' or 'ios' on a block, an option or a slide, when it
+//          applies to only one of them. In a video or image path, {platform} is
+//          filled in instead, so the two phones are shown their own pictures.
 //
 // Blocks, in the order they are drawn:
 //   options  big tappable cards that open another screen (`go`)
 //   trust    the privacy panel
 //   video    "Watch the video" — plays inline, hides itself if there is no file
+//   slides   numbered screenshots, one at a time, each with one short sentence
 //   steps    numbered instructions, each with an optional screenshot
 //   list     icon + title + description rows, each with an optional screenshot
 //   grid     small tiles, icon and title only
@@ -83,22 +84,31 @@ window.GUIDE_CONTENT = {
       tone: 'primary',
       icon: 'phone',
       title: 'connect_phone_title',
-      subtitle: 'connect_phone_desc',
+      subtitle: 'here_steps_subtitle',
       blocks: [
         // {platform} is android or ios, so each phone is shown its own
         // recording. Drop the file in and the card appears by itself; while
         // there is none, nobody sees a button that does nothing.
         { type: 'video', src: 'assets/video/{platform}/connect-this-phone.mp4' },
+        // Every tap, as a picture of the phone reading this. The two platforms
+        // only part ways at the menu that leads to Linked devices.
         {
-          type: 'steps',
+          type: 'slides',
           items: [
-            { title: 'add_account', desc: 'add_account_desc' },
-            { title: 'here_login_title', desc: 'here_login_desc' },
-            { title: 'here_code_title', desc: 'here_code_desc' },
-            { title: 'wait_title', desc: 'wait_desc' },
+            { image: 'assets/img/connection-steps/{platform}/01-open-app.jpg', text: 'step_open_app' },
+            { image: 'assets/img/connection-steps/{platform}/02-name-account.jpg', text: 'step_name_account' },
+            { image: 'assets/img/connection-steps/{platform}/03-log-in-with-number.jpg', text: 'step_log_in_with_number' },
+            { image: 'assets/img/connection-steps/{platform}/04-enter-number.jpg', text: 'step_enter_number' },
+            { image: 'assets/img/connection-steps/{platform}/05-code-copied.jpg', text: 'step_code_copied' },
+            { image: 'assets/img/connection-steps/{platform}/06-open-whatsapp.jpg', text: 'step_open_whatsapp' },
+            { image: 'assets/img/connection-steps/android/07-linked-devices.jpg', text: 'step_linked_devices_android', platform: 'android' },
+            { image: 'assets/img/connection-steps/ios/07-linked-devices.jpg', text: 'step_linked_devices_ios', platform: 'ios' },
+            { image: 'assets/img/connection-steps/{platform}/08-link-a-device.jpg', text: 'step_link_a_device' },
+            { image: 'assets/img/connection-steps/{platform}/09-link-with-number.jpg', text: 'step_link_with_number' },
+            { image: 'assets/img/connection-steps/{platform}/10-paste-code.jpg', text: 'step_paste_code' },
+            { image: 'assets/img/connection-steps/{platform}/11-connected.jpg', text: 'step_connected' },
           ],
         },
-        { type: 'shot', image: 'assets/img/connect-phone.jpg' },
         { type: 'note', icon: 'bulb', title: 'ready_open_title', desc: 'ready_open_desc' },
         { type: 'done' },
       ],

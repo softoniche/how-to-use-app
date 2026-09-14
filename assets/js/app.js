@@ -153,6 +153,11 @@
     return !thing.platform || thing.platform === platform;
   }
 
+  /** A video or picture path, with {platform} filled in for the phone reading it. */
+  function forPlatform(path) {
+    return path ? String(path).split('{platform}').join(platform) : '';
+  }
+
   var total = Object.keys(screens).filter(function (id) {
     return !!screenDef(id);
   }).length;
@@ -194,17 +199,11 @@
   // nothing — and so the button is already decided by the time it is reached.
   var videos = {};
 
-  /** A recording's path, with {platform} filled in for the phone reading it. */
-  function videoSrc(block) {
-    if (!block || !block.src) return '';
-    return block.src.split('{platform}').join(platform);
-  }
-
   function findVideos() {
     Object.keys(screens).forEach(function (id) {
       (screens[id].blocks || []).forEach(function (block) {
         if (block.type !== 'video' || !applies(block)) return;
-        var src = videoSrc(block);
+        var src = forPlatform(block.src);
         if (!src || src in videos) return;
         videos[src] = undefined;
         probe(src, function (found) {
@@ -275,10 +274,11 @@
   }
 
   function shot(image, titleId) {
-    if (!image) return '';
+    var src = forPlatform(image);
+    if (!src) return '';
     return (
-      '<button class="shot" type="button" data-shot="' + escapeHtml(image) + '" aria-label="' + escapeHtml(t('tap_enlarge')) + '">' +
-      '<img src="' + escapeHtml(image) + '" alt="' + escapeHtml(titleId ? t(titleId) : '') + '" decoding="async" loading="lazy">' +
+      '<button class="shot" type="button" data-shot="' + escapeHtml(src) + '" aria-label="' + escapeHtml(t('tap_enlarge')) + '">' +
+      '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(titleId ? t(titleId) : '') + '" decoding="async" loading="lazy">' +
       '<span class="shot__hint">' + icon('zoom-in') + escapeHtml(t('tap_zoom')) + '</span>' +
       '</button>'
     );
@@ -329,7 +329,7 @@
 
   function renderVideo(block) {
     // Hidden until the file is known to be there; see findVideos().
-    var src = videoSrc(block);
+    var src = forPlatform(block.src);
     if (!src || videos[src] === false) return '';
     return (
       '<div class="video" data-src="' + escapeHtml(src) + '"' + (videos[src] === true ? '' : ' hidden') + '>' +
@@ -340,6 +340,41 @@
       '<span class="card__desc">' + escapeHtml(t('watch_video_desc')) + '</span>' +
       '</span>' +
       '</button>' +
+      '</div>'
+    );
+  }
+
+  function renderSlides(block) {
+    var items = visible(block.items);
+    if (!items.length) return '';
+    return (
+      '<div class="slides">' +
+      '<ol class="slides__track">' +
+      items
+        .map(function (item, i) {
+          return (
+            '<li class="slide' + (i === 0 ? ' is-active' : '') + '">' +
+            shot(item.image, item.text) +
+            '<p class="slide__text">' +
+            '<span class="step__num">' + (i + 1) + '</span>' +
+            '<span>' + escapeHtml(t(item.text)) + '</span>' +
+            '</p>' +
+            '</li>'
+          );
+        })
+        .join('') +
+      '</ol>' +
+      '<div class="slides__nav">' +
+      '<button class="slides__arrow is-back" type="button" data-slide="-1" aria-label="' + escapeHtml(t('back')) + '" disabled>' + icon('chevron') + '</button>' +
+      '<span class="slides__dots" aria-hidden="true">' +
+      items
+        .map(function (item, i) {
+          return '<span class="slides__dot' + (i === 0 ? ' is-active' : '') + '"></span>';
+        })
+        .join('') +
+      '</span>' +
+      '<button class="slides__arrow" type="button" data-slide="1" aria-label="' + escapeHtml(t('next')) + '"' + (items.length < 2 ? ' disabled' : '') + '>' + icon('chevron') + '</button>' +
+      '</div>' +
       '</div>'
     );
   }
@@ -422,6 +457,7 @@
       case 'options': return renderOptions(block);
       case 'trust': return renderTrust(block);
       case 'video': return renderVideo(block);
+      case 'slides': return renderSlides(block);
       case 'steps': return renderSteps(block);
       case 'list': return renderList(block);
       case 'grid': return renderGrid(block);
@@ -455,7 +491,84 @@
         remove(img.closest ? img.closest('.shot') : img.parentNode);
       });
     });
+    wireSlides(section);
     return section;
+  }
+
+  // ── Slides: one picture at a time ───────────────────────────────────────
+
+  function trackOf(slides) {
+    return slides.querySelector('.slides__track');
+  }
+
+  /** The picture nearest the middle of its strip: the one being read. */
+  function currentSlide(slides) {
+    var track = trackOf(slides);
+    var box = track.getBoundingClientRect();
+    var middle = box.left + box.width / 2;
+    var nearest = 0;
+    var nearestDistance = Infinity;
+    Array.prototype.forEach.call(track.children, function (slide, i) {
+      var rect = slide.getBoundingClientRect();
+      var distance = Math.abs(rect.left + rect.width / 2 - middle);
+      if (distance < nearestDistance) {
+        nearest = i;
+        nearestDistance = distance;
+      }
+    });
+    return nearest;
+  }
+
+  /**
+   * Brings a picture to the middle of the strip. The distance is measured on
+   * the screen rather than in scrollLeft, which counts backwards in Arabic —
+   * and differently in each engine — while a distance on screen does not.
+   */
+  function showSlide(slides, index) {
+    var track = trackOf(slides);
+    var slide = track.children[clamp(index, 0, track.children.length - 1)];
+    var box = track.getBoundingClientRect();
+    var rect = slide.getBoundingClientRect();
+    var distance = rect.left + rect.width / 2 - (box.left + box.width / 2);
+    if ('scrollBehavior' in document.documentElement.style) {
+      track.scrollBy({ left: distance, behavior: 'smooth' });
+    } else {
+      track.scrollLeft += distance;
+    }
+  }
+
+  /** Lights up the picture being read, its dot, and the arrows that still lead somewhere. */
+  function markSlide(slides) {
+    var track = trackOf(slides);
+    var index = currentSlide(slides);
+    Array.prototype.forEach.call(track.children, function (slide, i) {
+      slide.classList.toggle('is-active', i === index);
+    });
+    Array.prototype.forEach.call(slides.querySelectorAll('.slides__dot'), function (dot, i) {
+      dot.classList.toggle('is-active', i === index);
+    });
+    slides.querySelector('[data-slide="-1"]').disabled = index === 0;
+    slides.querySelector('[data-slide="1"]').disabled = index === track.children.length - 1;
+  }
+
+  function wireSlides(section) {
+    Array.prototype.forEach.call(section.querySelectorAll('.slides'), function (slides) {
+      var queued = false;
+      // A swipe fires scroll events far faster than anyone can see: catch up
+      // once a frame. They do not bubble, so every strip listens for itself.
+      trackOf(slides).addEventListener(
+        'scroll',
+        function () {
+          if (queued) return;
+          queued = true;
+          requestAnimationFrame(function () {
+            queued = false;
+            markSlide(slides);
+          });
+        },
+        { passive: true }
+      );
+    });
   }
 
   // ── Moving between screens ──────────────────────────────────────────────
@@ -563,6 +676,13 @@
 
       var picture = target.closest('.shot');
       if (picture) { lightbox.open(picture); return; }
+
+      var arrow = target.closest('[data-slide]');
+      if (arrow) {
+        var slides = arrow.closest('.slides');
+        showSlide(slides, currentSlide(slides) + Number(arrow.getAttribute('data-slide')));
+        return;
+      }
 
       var option = target.closest('[data-go]');
       if (option) { push(option.getAttribute('data-go')); return; }

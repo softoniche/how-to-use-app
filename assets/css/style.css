@@ -410,6 +410,107 @@ svg { display: block; }
   text-align: center;
 }
 
+/* ── Slides: one screenshot at a time, swiped or stepped through ────────── */
+
+/* The strip runs past the text column to the edges of the screen, and is
+   padded so that every picture — the first and the last too — stops in the
+   middle, with its neighbours peeking in on either side. */
+.slides__track {
+  display: flex;
+  gap: 12px;
+  margin: 0 -20px;
+  padding: 4px 20px 18px;
+  padding: 4px calc(50% - min(39vw, 150px) + 20px) 18px;
+  list-style: none;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.slides__track::-webkit-scrollbar { display: none; }
+
+.slide {
+  flex: none;
+  width: 78vw;
+  width: min(78vw, 300px);
+  padding: 10px;
+  background: var(--surface-container);
+  border: 1px solid var(--outline);
+  border-radius: var(--radius-tile);
+  box-shadow: var(--shadow);
+  scroll-snap-align: center;
+  /* One swipe, one step: a quick flick never skips a tap the user needs. */
+  scroll-snap-stop: always;
+  opacity: 0.5;
+  transition: opacity 0.25s ease;
+}
+.slide.is-active { opacity: 1; }
+
+/* The phone's screen, standing on the accent. */
+.slide .shot {
+  margin: 0;
+  padding: 14px;
+  border: 0;
+  background: var(--accent-soft);
+  text-align: center;
+}
+.slide .shot img {
+  display: inline-block;
+  vertical-align: top;
+  width: auto;
+  height: 380px;
+  height: min(50dvh, 420px);
+  max-height: none;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(15, 20, 25, 0.16);
+}
+/* Up over the status bar, where it hides nothing the step is about. */
+.slide .shot__hint { inset-block-start: 8px; inset-block-end: auto; }
+
+.slide__text {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 2px 2px;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.slide__text .step__num { width: 26px; height: 26px; margin-top: -2px; font-size: 12.5px; }
+
+.slides__nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+
+.slides__arrow {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  transition: transform 0.12s ease, opacity 0.2s ease;
+}
+.slides__arrow.is-back { background: var(--surface-container); color: var(--on-surface); border: 1px solid var(--outline); }
+.slides__arrow:active { transform: scale(0.94); }
+.slides__arrow:disabled { opacity: 0.35; cursor: default; transform: none; }
+.slides__arrow .icon { width: 22px; height: 22px; stroke-width: 2; }
+/* The chevron points onwards; back points the other way, and in Arabic both swap. */
+.slides__arrow.is-back .icon,
+[dir='rtl'] .slides__arrow .icon { transform: scaleX(-1); }
+[dir='rtl'] .slides__arrow.is-back .icon { transform: none; }
+
+.slides__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-width: 0; }
+.slides__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--outline);
+  transition: width 0.25s var(--ease), background-color 0.25s ease;
+}
+.slides__dot.is-active { width: 20px; background: var(--accent); }
+
 /* ── Steps: numbered, tied together by a thread ─────────────────────────── */
 
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
@@ -631,6 +732,16 @@ svg { display: block; }
   .brand__logo { width: 34px; height: 34px; border-radius: 10px; }
   .brand__name { font-size: 18px; }
   .shot img { max-height: 400px; max-height: min(38dvh, 420px); }
+  /* The column's gutter is wider here, so the strip reaches further — and no
+     longer to the edge of the screen, so its ends fade out instead of cutting
+     a picture in half. */
+  .slides__track {
+    margin: 0 -28px;
+    padding: 4px calc(50% - 150px + 28px) 18px;
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+    mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
+  }
+  .slide__text { font-size: 16px; }
 }
 
 @media (min-width: 900px) {
@@ -643,6 +754,7 @@ svg { display: block; }
   /* Roomy enough to read the instruction beside its screenshot. */
   .list .card { padding: 18px; }
   .shot img { max-height: 440px; max-height: min(46dvh, 460px); }
+  .slides__track { margin: 0 -36px; padding: 4px calc(50% - 150px + 36px) 18px; }
 }
 
 /* Landscape phones have no room for the full header. */
