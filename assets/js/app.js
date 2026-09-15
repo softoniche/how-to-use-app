@@ -1,22 +1,26 @@
 /* ───────────────────────────────────────────────────────────────────────────
    InvisChat — how the app works
    A small stack of screens, built from content.js and translated by i18n.js.
-   The first one asks what the user wants to know; every answer is one tap
-   away, and the way back is always the same.
+
+   On a fresh install it opens on a short story: a few pages, one thing the
+   app does on each, a button that carries the user through them and then into
+   the app. From Settings it opens on one page to scroll. Either way every
+   answer is one tap away, and the way back is always the same.
 
    It answers at more than one address. `/` is the whole guide; a folder of
    its own — `/connect-account/` — is one screen of it, standing alone, for a
    link that should open there and nowhere else. Such a page says which screen
    it is in `window.GUIDE_SCREEN`, and has nothing behind it: leaving it leaves
-   the page rather than falling back to the question.
+   the page rather than falling back to the start.
 
    Query parameters
      lang=en|tr|de|id|es|pt|ar|fr|ms|af|hi   what language to read it in
      full=1|0        1 (default) shows everything, 0 only connecting
      platform=android|ios    which recordings to show; read off the browser
                              when the app does not say
-     screen=<id>     open on a screen other than home — for a support link
-     mode=guide|onboarding   onboarding offers "Skip" and ends on "Get started"
+     screen=<id>     open on another screen, with the start behind it
+     mode=guide|onboarding   onboarding opens on the story, offers "Skip" and
+                             ends on "Get started"
      theme=light|dark        defaults to the device setting
 
    Inside the app it also talks to Flutter: it reports where the user is over
@@ -84,12 +88,23 @@
     return 'android';
   }
 
-  /** The translation for a string id, falling back to English. */
-  function t(id) {
+  /**
+   * The translation for a string id, falling back to English. `{app}` is the
+   * app's name; any other `{name}` is filled in from `vars`.
+   */
+  function t(id, vars) {
     var entry = I18N[id];
     if (!entry) return '';
     var value = entry[lang] || entry[FALLBACK_LANG] || '';
-    return value.indexOf('{app}') === -1 ? value : value.split('{app}').join(APP_NAME);
+    return value.replace(/\{(\w+)\}/g, function (match, key) {
+      if (key === 'app') return APP_NAME;
+      return vars && key in vars ? String(vars[key]) : match;
+    });
+  }
+
+  /** A translation, ready to be put into markup. */
+  function text(id, vars) {
+    return escapeHtml(t(id, vars));
   }
 
   function icon(name, extraClass) {
@@ -109,6 +124,10 @@
 
   function remove(node) {
     if (node && node.parentNode) node.parentNode.removeChild(node);
+  }
+
+  function each(list, fn) {
+    Array.prototype.forEach.call(list, fn);
   }
 
   // ── The bridge to the app ───────────────────────────────────────────────
@@ -132,25 +151,23 @@
   // ── Which screens exist ─────────────────────────────────────────────────
 
   var screens = CONTENT.screens || {};
-  var HOME = CONTENT.home || 'home';
 
-  /** A screen, or nothing when this build of the app does not include it. */
-  function screenDef(id) {
-    var def = screens[id];
-    if (!def) return null;
-    return !showAll && def.full ? null : def;
+  /** Whether a screen, block, page or item belongs in this build and on this phone. */
+  function applies(thing) {
+    if (thing.full && !showAll) return false;
+    if (thing.lite && showAll) return false;
+    return !thing.platform || thing.platform === platform;
   }
 
   /** The items of a block, minus what this build and this phone do not show. */
   function visible(items) {
-    return (items || []).filter(function (item) {
-      return (showAll || !item.full) && applies(item);
-    });
+    return (items || []).filter(applies);
   }
 
-  /** Whether something marked for one platform belongs on this one. */
-  function applies(thing) {
-    return !thing.platform || thing.platform === platform;
+  /** A screen, or nothing when this build of the app does not include it. */
+  function screenDef(id) {
+    var def = screens[id];
+    return def && applies(def) ? def : null;
   }
 
   /** A video or picture path, with {platform} filled in for the phone reading it. */
@@ -173,7 +190,10 @@
     return typeof id === 'string' && screenDef(id) ? id : null;
   })();
 
-  /** Where the deck starts: this page's own screen, or the question. */
+  /** Where the guide starts: the story on a fresh install, the one page from Settings. */
+  var HOME = (isOnboarding && screenDef(CONTENT.onboarding) && CONTENT.onboarding) || CONTENT.home || 'home';
+
+  /** Where the deck starts: this page's own screen, or the start of the guide. */
   var firstScreen = ownScreen || HOME;
 
   // ── Theme ───────────────────────────────────────────────────────────────
@@ -209,7 +229,7 @@
         probe(src, function (found) {
           videos[src] = found;
           // A screen already on the page catches up with the answer.
-          Array.prototype.forEach.call(document.querySelectorAll('.video'), function (card) {
+          each(document.querySelectorAll('.video'), function (card) {
             if (card.getAttribute('data-src') !== src) return;
             if (found) card.hidden = false;
             else remove(card);
@@ -244,7 +264,7 @@
     video.setAttribute('playsinline', '');
     video.setAttribute('webkit-playsinline', '');
     video.addEventListener('error', function () {
-      card.innerHTML = '<p class="video__error">' + escapeHtml(t('video_error')) + '</p>';
+      card.innerHTML = '<p class="video__error">' + text('video_error') + '</p>';
     });
 
     var frame = document.createElement('div');
@@ -255,6 +275,108 @@
 
     var started = video.play();
     if (started && started.catch) started.catch(function () { /* the controls are there */ });
+  }
+
+  // ── The pictures of what the app does ───────────────────────────────────
+
+  // Each one is a moment the user already knows from their chats — a message
+  // deleted, a photo that can only be opened once, a status about to vanish —
+  // next to what the app keeps of it. The chat side is a real screenshot; the
+  // app side is drawn here, so it reads in the user's own language.
+
+  function picture(src, extraClass) {
+    return '<img class="demo__img ' + (extraClass || '') + '" src="' + escapeHtml(src) + '" alt="" decoding="async">';
+  }
+
+  var DEMOS = {
+    deleted: function () {
+      return (
+        picture('assets/img/features/deleted.jpg', 'demo__bubble demo__bubble--wide') +
+        '<span class="demo__arrow demo__reveal">' + icon('arrow-down') + '</span>' +
+        '<span class="demo__card demo__reveal">' +
+        '<span class="demo__tag">' + icon('restore') + text('demo_recovered') + '</span>' +
+        '<span class="demo__text">' + text('demo_deleted_text') + '</span>' +
+        '</span>'
+      );
+    },
+    // A photo that can be opened once, then a video — both kept all the same.
+    view_once: function () {
+      return (
+        '<span class="demo__swap">' +
+        picture('assets/img/features/view-once-photo.jpg', 'demo__bubble') +
+        picture('assets/img/features/view-once-video.jpg', 'demo__bubble demo__swap-in') +
+        '</span>' +
+        '<span class="demo__arrow demo__reveal">' + icon('arrow-down') + '</span>' +
+        '<span class="demo__card demo__card--row demo__reveal">' +
+        '<span class="demo__thumb"><span class="demo__play demo__swap-in">' + icon('play') + '</span></span>' +
+        '<span class="demo__card-text">' +
+        '<span class="demo__tag">' + icon('bookmark') + text('view_once') + '</span>' +
+        '<span class="demo__again">' + icon('eye') + text('demo_view_again') + '</span>' +
+        '</span>' +
+        '</span>'
+      );
+    },
+    // A status, and the button that puts it in the gallery.
+    status: function () {
+      return (
+        '<span class="status-mock">' +
+        '<span class="status-mock__bars"><i></i><i></i><i></i></span>' +
+        '<span class="status-mock__who"><i class="status-mock__avatar"></i><i class="status-mock__name"></i></span>' +
+        '<i class="status-mock__sun"></i>' +
+        '<span class="status-mock__save">' +
+        '<span class="status-mock__idle">' + icon('download') + text('save_to_gallery') + '</span>' +
+        '<span class="status-mock__done">' + icon('check') + text('saved_to_gallery') + '</span>' +
+        '</span>' +
+        '</span>'
+      );
+    },
+    // Blue ticks going quiet as Ghost mode is switched on.
+    ticks: function () {
+      return (
+        '<span class="demo__swap demo__ticks">' +
+        picture('assets/img/features/ticks-blue.png') +
+        picture('assets/img/features/ticks-hidden.png', 'demo__swap-in') +
+        '</span>' +
+        '<span class="demo__toggle">' +
+        '<span class="demo__toggle-label">' + icon('moon') + text('toolbar_ghost_title') + '</span>' +
+        '<span class="demo__switch"><i class="demo__knob"></i></span>' +
+        '</span>'
+      );
+    },
+    shield: function () {
+      return '<span class="demo__shield">' + icon('shield-check') + '</span>';
+    },
+  };
+
+  function demo(name) {
+    var draw = DEMOS[name];
+    return draw ? '<span class="demo demo--' + name + '">' + draw() + '</span>' : '';
+  }
+
+  // A picture moves only while it is on screen: one that is scrolled or swiped
+  // away holds still, and starts from the beginning of its story when it is
+  // first seen rather than halfway through it.
+  var demoObserver =
+    typeof window.IntersectionObserver === 'function'
+      ? new window.IntersectionObserver(
+          function (entries) {
+            entries.forEach(function (entry) {
+              entry.target.classList.toggle('is-live', entry.isIntersecting && entry.intersectionRatio >= 0.5);
+            });
+          },
+          { threshold: [0, 0.5] }
+        )
+      : null;
+
+  function watchDemos(section) {
+    each(section.querySelectorAll('.demo'), function (el) {
+      if (demoObserver) demoObserver.observe(el);
+      else el.classList.add('is-live');
+    });
+    // A picture that never arrives leaves the drawing without a hole in it.
+    each(section.querySelectorAll('.demo__img'), function (img) {
+      img.addEventListener('error', function () { img.hidden = true; });
+    });
   }
 
   // ── Drawing a screen ────────────────────────────────────────────────────
@@ -273,31 +395,120 @@
     return '<span class="card__icon">' + icon(name) + '</span>';
   }
 
+  /** A block's own heading, when it has one. */
+  function label(block) {
+    return block.label ? '<h3 class="block__label">' + text(block.label) + '</h3>' : '';
+  }
+
   function shot(image, titleId) {
     var src = forPlatform(image);
     if (!src) return '';
     return (
-      '<button class="shot" type="button" data-shot="' + escapeHtml(src) + '" aria-label="' + escapeHtml(t('tap_enlarge')) + '">' +
-      '<img src="' + escapeHtml(src) + '" alt="' + escapeHtml(titleId ? t(titleId) : '') + '" decoding="async" loading="lazy">' +
-      '<span class="shot__hint">' + icon('zoom-in') + escapeHtml(t('tap_zoom')) + '</span>' +
+      '<button class="shot" type="button" data-shot="' + escapeHtml(src) + '" aria-label="' + text('tap_enlarge') + '">' +
+      '<img src="' + escapeHtml(src) + '" alt="' + (titleId ? text(titleId) : '') + '" decoding="async" loading="lazy">' +
+      '<span class="shot__hint">' + icon('zoom-in') + text('tap_zoom') + '</span>' +
       '</button>'
     );
   }
 
-  function renderOptions(block) {
+  function renderStory(block) {
+    var pages = visible(block.pages);
+    if (!pages.length) return '';
+    return (
+      '<div class="story" data-index="0">' +
+      '<ol class="story__track track">' +
+      pages
+        .map(function (page, i) {
+          return (
+            '<li class="story__page' + (i === 0 ? ' is-active' : '') + '">' +
+            '<div class="story__content">' +
+            (page.stage ? '<div class="story__stage" aria-hidden="true">' + demo(page.stage) + '</div>' : '') +
+            (page.blocks || []).map(renderBlock).join('') +
+            '</div>' +
+            '</li>'
+          );
+        })
+        .join('') +
+      '</ol>' +
+      (pages.length > 1
+        ? '<div class="story__dots" aria-hidden="true">' +
+          pages
+            .map(function (page, i) {
+              return '<span class="story__dot' + (i === 0 ? ' is-active' : '') + '"></span>';
+            })
+            .join('') +
+          '</div>'
+        : '') +
+      '</div>'
+    );
+  }
+
+  function renderHero(block) {
+    var badges = visible(block.badges);
+    return (
+      '<header class="hero">' +
+      (block.pill ? '<span class="hero__pill">' + text(block.pill) + '</span>' : '') +
+      '<h2 class="hero__title">' + text(block.title) + '</h2>' +
+      (block.subtitle ? '<p class="hero__subtitle">' + text(block.subtitle) + '</p>' : '') +
+      (badges.length
+        ? '<ul class="hero__badges">' +
+          badges
+            .map(function (badge) {
+              return '<li class="hero__badge">' + icon(badge.icon) + '<span>' + text(badge.text) + '</span></li>';
+            })
+            .join('') +
+          '</ul>'
+        : '') +
+      '</header>'
+    );
+  }
+
+  function renderShowcase(block) {
     var items = visible(block.items);
     if (!items.length) return '';
     return (
-      (block.label ? '<p class="options__label">' + escapeHtml(t(block.label)) + '</p>' : '') +
+      '<div class="showcase">' +
+      label(block) +
+      items
+        .map(function (item) {
+          var go = item.go && screenDef(item.go) ? item.go : null;
+          var tag = go ? 'button' : 'div';
+          return (
+            '<' + tag + ' class="feature"' + (go ? ' type="button" data-go="' + escapeHtml(go) + '"' : '') + '>' +
+            '<span class="feature__stage" aria-hidden="true">' + demo(item.demo) + '</span>' +
+            '<span class="feature__body">' +
+            '<span class="feature__text">' +
+            '<span class="feature__title">' + text(item.title) + '</span>' +
+            '<span class="feature__desc">' + text(item.desc) + '</span>' +
+            '</span>' +
+            (go ? '<span class="feature__go">' + icon('chevron') + '</span>' : '') +
+            '</span>' +
+            '</' + tag + '>'
+          );
+        })
+        .join('') +
+      '</div>'
+    );
+  }
+
+  function renderOptions(block) {
+    // An option whose screen this build leaves out is left out with it.
+    var items = visible(block.items).filter(function (item) {
+      return !!screenDef(item.go);
+    });
+    if (!items.length) return '';
+    return (
       '<div class="options">' +
+      label(block) +
       items
         .map(function (item) {
           return (
-            '<button class="option" type="button" data-go="' + escapeHtml(item.go) + '">' +
+            '<button class="option' + (item.accent ? ' option--accent' : '') + '" type="button" data-go="' + escapeHtml(item.go) + '">' +
             cardIcon(item.icon) +
             '<span class="option__text">' +
-            '<span class="option__title card__title">' + escapeHtml(t(item.title)) + '</span>' +
-            (item.desc ? '<span class="card__desc">' + escapeHtml(t(item.desc)) + '</span>' : '') +
+            (item.badge ? '<span class="option__badge">' + text(item.badge) + '</span>' : '') +
+            '<span class="option__title">' + text(item.title) + '</span>' +
+            (item.desc ? '<span class="card__desc">' + text(item.desc) + '</span>' : '') +
             '</span>' +
             '<span class="option__go">' + icon('chevron') + '</span>' +
             '</button>'
@@ -311,14 +522,14 @@
   function renderTrust(block) {
     return (
       '<section class="trust">' +
-      '<h3 class="trust__head">' + icon(block.icon || 'shield-check') + '<span>' + escapeHtml(t(block.title)) + '</span></h3>' +
-      block.items
+      '<h3 class="trust__head"><span class="trust__badge">' + icon(block.icon || 'shield-check') + '</span><span>' + text(block.title) + '</span></h3>' +
+      visible(block.items)
         .map(function (item) {
           return (
             '<div class="trust__item">' +
-            icon(item.icon) +
-            '<div><p class="trust__title">' + escapeHtml(t(item.title)) + '</p>' +
-            '<p class="trust__desc">' + escapeHtml(t(item.desc)) + '</p></div>' +
+            '<span class="trust__icon">' + icon(item.icon) + '</span>' +
+            '<div><p class="trust__title">' + text(item.title) + '</p>' +
+            '<p class="trust__desc">' + text(item.desc) + '</p></div>' +
             '</div>'
           );
         })
@@ -336,44 +547,41 @@
       '<button class="video__button" type="button" data-video="1">' +
       '<span class="video__play">' + icon('play') + '</span>' +
       '<span class="option__text">' +
-      '<span class="video__title">' + escapeHtml(t('watch_video')) + '</span>' +
-      '<span class="card__desc">' + escapeHtml(t('watch_video_desc')) + '</span>' +
+      '<span class="option__title">' + text('watch_video') + '</span>' +
+      '<span class="card__desc">' + text('watch_video_desc') + '</span>' +
       '</span>' +
       '</button>' +
       '</div>'
     );
   }
 
+  /**
+   * One screenshot at a time, with how far along the user is above it and the
+   * way on below it. On the last picture the way on becomes "Got it".
+   */
   function renderSlides(block) {
     var items = visible(block.items);
     if (!items.length) return '';
     return (
-      '<div class="slides">' +
-      '<ol class="slides__track">' +
+      '<div class="stepper' + (items.length === 1 ? ' is-last' : '') + '" data-index="0">' +
+      '<div class="stepper__head">' +
+      '<span class="stepper__count">' + text('step_of', { n: 1, total: items.length }) + '</span>' +
+      '<span class="stepper__bar"><span class="stepper__fill" style="width:' + 100 / items.length + '%"></span></span>' +
+      '</div>' +
+      '<ol class="slides__track track">' +
       items
         .map(function (item, i) {
-          return (
-            '<li class="slide' + (i === 0 ? ' is-active' : '') + '">' +
-            shot(item.image, item.text) +
-            '<p class="slide__text">' +
-            '<span class="step__num">' + (i + 1) + '</span>' +
-            '<span>' + escapeHtml(t(item.text)) + '</span>' +
-            '</p>' +
-            '</li>'
-          );
+          // The instruction first, so it is read before the picture is looked at.
+          return '<li class="slide' + (i === 0 ? ' is-active' : '') + '"><p class="slide__text">' + text(item.text) + '</p>' + shot(item.image, item.text) + '</li>';
         })
         .join('') +
       '</ol>' +
-      '<div class="slides__nav">' +
-      '<button class="slides__arrow is-back" type="button" data-slide="-1" aria-label="' + escapeHtml(t('back')) + '" disabled>' + icon('chevron') + '</button>' +
-      '<span class="slides__dots" aria-hidden="true">' +
-      items
-        .map(function (item, i) {
-          return '<span class="slides__dot' + (i === 0 ? ' is-active' : '') + '"></span>';
-        })
-        .join('') +
-      '</span>' +
-      '<button class="slides__arrow" type="button" data-slide="1" aria-label="' + escapeHtml(t('next')) + '"' + (items.length < 2 ? ' disabled' : '') + '>' + icon('chevron') + '</button>' +
+      '<div class="stepper__nav">' +
+      '<button class="btn btn--quiet" type="button" data-slide="-1" aria-label="' + text('back') + '" disabled>' + icon('chevron', 'is-back') + '</button>' +
+      '<button class="btn btn--primary" type="button" data-slide="1">' +
+      '<span class="when-next">' + text('next') + '</span>' + icon('chevron', 'when-next is-forward') +
+      '<span class="when-done">' + text('got_it') + '</span>' + icon('check', 'when-done') +
+      '</button>' +
       '</div>' +
       '</div>'
     );
@@ -381,36 +589,39 @@
 
   function renderSteps(block) {
     return (
+      '<div class="steps-block">' +
+      label(block) +
       '<ol class="steps">' +
-      block.items
+      visible(block.items)
         .map(function (item, i) {
           return (
             '<li class="step">' +
             '<span class="step__num">' + (i + 1) + '</span>' +
             '<div class="step__body">' +
-            '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3>' +
-            (item.desc ? '<p class="card__desc">' + escapeHtml(t(item.desc)) + '</p>' : '') +
+            '<h3 class="card__title">' + text(item.title) + '</h3>' +
+            (item.desc ? '<p class="card__desc">' + text(item.desc) + '</p>' : '') +
             shot(item.image, item.title) +
             '</div>' +
             '</li>'
           );
         })
         .join('') +
-      '</ol>'
+      '</ol>' +
+      '</div>'
     );
   }
 
   function renderList(block) {
     return (
       '<div class="list">' +
-      block.items
+      visible(block.items)
         .map(function (item) {
           return (
             '<article class="card">' +
             cardIcon(item.icon) +
             '<div class="list__text">' +
-            '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3>' +
-            (item.desc ? '<p class="card__desc">' + escapeHtml(t(item.desc)) + '</p>' : '') +
+            '<h3 class="card__title">' + text(item.title) + '</h3>' +
+            (item.desc ? '<p class="card__desc">' + text(item.desc) + '</p>' : '') +
             shot(item.image, item.title) +
             '</div>' +
             '</article>'
@@ -421,24 +632,36 @@
     );
   }
 
-  function renderGrid(block) {
-    return (
-      '<div class="grid">' +
-      block.items
-        .map(function (item) {
-          return '<article class="card">' + cardIcon(item.icon) + '<h3 class="card__title">' + escapeHtml(t(item.title)) + '</h3></article>';
-        })
-        .join('') +
-      '</div>'
-    );
+  function renderShot(block) {
+    return '<div class="block--shot">' + shot(block.image, block.title) + '</div>';
   }
 
   function renderNote(block) {
     return (
-      '<div class="note">' +
+      '<div class="note' + (block.variant ? ' note--' + block.variant : '') + '">' +
       icon(block.icon || 'bulb') +
-      '<div><p class="note__title">' + escapeHtml(t(block.title)) + '</p>' +
-      '<p class="note__desc">' + escapeHtml(t(block.desc)) + '</p></div>' +
+      '<div><p class="note__title">' + text(block.title) + '</p>' +
+      '<p class="note__desc">' + text(block.desc) + '</p></div>' +
+      '</div>'
+    );
+  }
+
+  function renderFaq(block) {
+    return (
+      '<div class="faq">' +
+      label(block) +
+      '<div class="faq__list">' +
+      visible(block.items)
+        .map(function (item) {
+          return (
+            '<details class="faq__item">' +
+            '<summary class="faq__q"><span>' + text(item.q) + '</span>' + icon('chevron', 'faq__chevron') + '</summary>' +
+            '<p class="faq__a">' + text(item.a) + '</p>' +
+            '</details>'
+          );
+        })
+        .join('') +
+      '</div>' +
       '</div>'
     );
   }
@@ -446,69 +669,79 @@
   function renderDone() {
     return (
       '<div class="done"><button class="cta" type="button" data-done="1">' +
-      '<span>' + escapeHtml(t('got_it')) + '</span>' + icon('check') +
+      '<span>' + text('got_it') + '</span>' + icon('check') +
       '</button></div>'
     );
   }
 
+  var RENDERERS = {
+    story: renderStory,
+    hero: renderHero,
+    showcase: renderShowcase,
+    options: renderOptions,
+    trust: renderTrust,
+    video: renderVideo,
+    slides: renderSlides,
+    steps: renderSteps,
+    list: renderList,
+    shot: renderShot,
+    note: renderNote,
+    faq: renderFaq,
+    done: renderDone,
+  };
+
   function renderBlock(block) {
-    if (!applies(block)) return '';
-    switch (block.type) {
-      case 'options': return renderOptions(block);
-      case 'trust': return renderTrust(block);
-      case 'video': return renderVideo(block);
-      case 'slides': return renderSlides(block);
-      case 'steps': return renderSteps(block);
-      case 'list': return renderList(block);
-      case 'grid': return renderGrid(block);
-      case 'shot': return '<div class="block--shot">' + shot(block.image, block.title) + '</div>';
-      case 'note': return renderNote(block);
-      case 'done': return renderDone();
-      default: return '';
-    }
+    var render = RENDERERS[block.type];
+    return render && applies(block) ? render(block) : '';
   }
 
   function renderScreen(id, def) {
+    var isStory = (def.blocks || []).some(function (block) {
+      return block.type === 'story' && applies(block);
+    });
     var section = document.createElement('section');
-    section.className = 'screen';
+    section.className = 'screen' + (isStory ? ' screen--story' : '');
     section.setAttribute('data-tone', def.tone || 'primary');
     section.setAttribute('data-screen', id);
-    section.setAttribute('aria-label', t(def.title));
+    section.setAttribute('aria-label', t(def.title || def.label));
     section.innerHTML =
       '<div class="screen__inner">' +
-      '<header class="screen__header">' +
-      (def.icon ? '<div class="screen__badge">' + icon(def.icon) + '</div>' : '') +
-      (def.kicker ? '<span class="screen__kicker">' + escapeHtml(t(def.kicker)) + '</span>' : '') +
-      '<h2 class="screen__title">' + escapeHtml(t(def.title)) + '</h2>' +
-      (def.subtitle ? '<p class="screen__subtitle">' + escapeHtml(t(def.subtitle)) + '</p>' : '') +
-      '</header>' +
+      (def.title
+        ? '<header class="screen__header">' +
+          (def.icon ? '<div class="screen__badge">' + icon(def.icon) + '</div>' : '') +
+          '<h2 class="screen__title">' + text(def.title) + '</h2>' +
+          (def.subtitle ? '<p class="screen__subtitle">' + text(def.subtitle) + '</p>' : '') +
+          (def.meta ? '<span class="screen__meta">' + icon('clock') + '<span>' + text(def.meta) + '</span></span>' : '') +
+          '</header>'
+        : '') +
       '<div class="screen__body">' + (def.blocks || []).map(renderBlock).join('') + '</div>' +
       '</div>';
 
     // A screenshot that never arrives leaves the step without a hole in it.
-    Array.prototype.forEach.call(section.querySelectorAll('.shot img'), function (img) {
+    each(section.querySelectorAll('.shot img'), function (img) {
       img.addEventListener('error', function () {
         remove(img.closest ? img.closest('.shot') : img.parentNode);
       });
     });
-    wireSlides(section);
+    wireTracks(section);
+    watchDemos(section);
     return section;
   }
 
-  // ── Slides: one picture at a time ───────────────────────────────────────
+  // ── Tracks: the story's pages and the step pictures, one at a time ──────
 
-  function trackOf(slides) {
-    return slides.querySelector('.slides__track');
+  function trackOf(holder) {
+    return holder.querySelector('.track');
   }
 
-  /** The picture nearest the middle of its strip: the one being read. */
-  function currentSlide(slides) {
-    var track = trackOf(slides);
+  /** The page nearest the middle of its track: the one being read. */
+  function currentSlide(holder) {
+    var track = trackOf(holder);
     var box = track.getBoundingClientRect();
     var middle = box.left + box.width / 2;
     var nearest = 0;
     var nearestDistance = Infinity;
-    Array.prototype.forEach.call(track.children, function (slide, i) {
+    each(track.children, function (slide, i) {
       var rect = slide.getBoundingClientRect();
       var distance = Math.abs(rect.left + rect.width / 2 - middle);
       if (distance < nearestDistance) {
@@ -520,12 +753,12 @@
   }
 
   /**
-   * Brings a picture to the middle of the strip. The distance is measured on
-   * the screen rather than in scrollLeft, which counts backwards in Arabic —
-   * and differently in each engine — while a distance on screen does not.
+   * Brings a page to the middle of its track. The distance is measured on the
+   * screen rather than in scrollLeft, which counts backwards in Arabic — and
+   * differently in each engine — while a distance on screen does not.
    */
-  function showSlide(slides, index) {
-    var track = trackOf(slides);
+  function showSlide(holder, index) {
+    var track = trackOf(holder);
     var slide = track.children[clamp(index, 0, track.children.length - 1)];
     var box = track.getBoundingClientRect();
     var rect = slide.getBoundingClientRect();
@@ -537,33 +770,53 @@
     }
   }
 
-  /** Lights up the picture being read, its dot, and the arrows that still lead somewhere. */
-  function markSlide(slides) {
-    var track = trackOf(slides);
-    var index = currentSlide(slides);
-    Array.prototype.forEach.call(track.children, function (slide, i) {
-      slide.classList.toggle('is-active', i === index);
-    });
-    Array.prototype.forEach.call(slides.querySelectorAll('.slides__dot'), function (dot, i) {
-      dot.classList.toggle('is-active', i === index);
-    });
-    slides.querySelector('[data-slide="-1"]').disabled = index === 0;
-    slides.querySelector('[data-slide="1"]').disabled = index === track.children.length - 1;
+  /** The page a track last settled on, as markTrack() wrote it down. */
+  function indexOf(holder) {
+    return holder ? Number(holder.getAttribute('data-index')) || 0 : 0;
   }
 
-  function wireSlides(section) {
-    Array.prototype.forEach.call(section.querySelectorAll('.slides'), function (slides) {
+  function countOf(holder) {
+    return holder ? trackOf(holder).children.length : 0;
+  }
+
+  /** Lights up the page being read, and everything that follows from which one it is. */
+  function markTrack(holder) {
+    var index = currentSlide(holder);
+    if (index === indexOf(holder)) return;
+    var count = countOf(holder);
+    holder.setAttribute('data-index', index);
+    each(trackOf(holder).children, function (page, i) {
+      page.classList.toggle('is-active', i === index);
+    });
+
+    if (holder.classList.contains('story')) {
+      each(holder.querySelectorAll('.story__dot'), function (dot, i) {
+        dot.classList.toggle('is-active', i === index);
+      });
+      // A page of the story is a step the app counts, and its button changes.
+      onScreenChanged();
+      return;
+    }
+
+    holder.classList.toggle('is-last', index === count - 1);
+    holder.querySelector('.stepper__count').textContent = t('step_of', { n: index + 1, total: count });
+    holder.querySelector('.stepper__fill').style.width = ((index + 1) / count) * 100 + '%';
+    holder.querySelector('[data-slide="-1"]').disabled = index === 0;
+  }
+
+  function wireTracks(section) {
+    each(section.querySelectorAll('.story, .stepper'), function (holder) {
       var queued = false;
       // A swipe fires scroll events far faster than anyone can see: catch up
-      // once a frame. They do not bubble, so every strip listens for itself.
-      trackOf(slides).addEventListener(
+      // once a frame. They do not bubble, so every track listens for itself.
+      trackOf(holder).addEventListener(
         'scroll',
         function () {
           if (queued) return;
           queued = true;
           requestAnimationFrame(function () {
             queued = false;
-            markSlide(slides);
+            markTrack(holder);
           });
         },
         { passive: true }
@@ -629,7 +882,7 @@
 
   /**
    * Straight back to the bottom of the deck, however deep the user went: the
-   * question on the guide, this page's own screen on a page of its own.
+   * start on the guide, this page's own screen on a page of its own.
    */
   function goHome() {
     if (sliding) return false;
@@ -641,8 +894,23 @@
     return pop();
   }
 
+  /** The story at the bottom of the deck, when the guide opened on one. */
+  function bottomStory() {
+    return stack[0] ? stack[0].el.querySelector('.story') : null;
+  }
+
+  /**
+   * How far into the guide the user is: every screen above the first, and
+   * every page of the story they have swiped past. It is what the app steers
+   * its back gesture by, so a page of the story is as much a step back as a
+   * screen is.
+   */
+  function depth() {
+    return stack.length - 1 + indexOf(bottomStory());
+  }
+
   function onScreenChanged() {
-    // The bottom of the deck: the question on the guide, and on a page of its
+    // The bottom of the deck: the start on the guide, and on a page of its
     // own the screen that page is. Either way there is nothing behind it.
     var atFirst = stack.length <= 1;
     brand.hidden = !atFirst;
@@ -651,10 +919,45 @@
     // walkthrough has always offered it; a page of its own, read in a browser,
     // has nobody to tell — so it offers nothing to press.
     bottomBar.hidden = !atFirst || (!!ownScreen && !Bridge.available);
+    drawCta();
 
-    // `index` is how deep the user is, which is what the app steers its back
-    // gesture by. `last` is answered in finish(), below.
-    Bridge.post({ type: 'page', index: stack.length - 1, last: false, total: total });
+    // `last` is answered in finish(), below.
+    Bridge.post({ type: 'page', index: depth(), last: false, total: total });
+  }
+
+  /** Whether the story still has pages ahead of the one being read. */
+  function storyGoesOn() {
+    var story = stack.length === 1 ? bottomStory() : null;
+    return !!story && indexOf(story) < countOf(story) - 1;
+  }
+
+  /** The button at the bottom: on through the story while there is more of it, then into the app. */
+  function drawCta() {
+    var onwards = storyGoesOn();
+    var directional = onwards || isOnboarding;
+    ctaLabel.textContent = onwards ? t('continue') : isOnboarding ? t('get_started') : t('done');
+    ctaIcon.innerHTML = ICONS[directional ? 'arrow' : 'check'];
+    ctaIcon.classList.toggle('is-directional', directional);
+  }
+
+  function onCta() {
+    if (storyGoesOn()) {
+      var story = bottomStory();
+      showSlide(story, indexOf(story) + 1);
+      return;
+    }
+    finish('cta');
+  }
+
+  /** One step back: a screen if there is one above the first, else a page of the story. */
+  function previous() {
+    if (stack.length > 1) return pop();
+    var story = bottomStory();
+    if (story && indexOf(story) > 0) {
+      showSlide(story, indexOf(story) - 1);
+      return true;
+    }
+    return false;
   }
 
   function finish(reason) {
@@ -663,8 +966,19 @@
     // that counts is closing it on the button — never a skip, which is not a
     // walkthrough completed. The index has to differ from the one the app saw
     // last for it to read `last` at all.
-    if (reason !== 'skip' && !ownScreen) Bridge.post({ type: 'page', index: stack.length, last: true, total: total });
-    Bridge.post({ type: 'finish', reason: reason, index: stack.length - 1 });
+    if (reason !== 'skip' && !ownScreen) Bridge.post({ type: 'page', index: depth() + 1, last: true, total: total });
+    Bridge.post({ type: 'finish', reason: reason, index: depth() });
+  }
+
+  /**
+   * "Got it", at the end of something read. On the guide it returns to the
+   * start. On a page of its own inside the app there is nothing to return to
+   * but the account the user was linking, so it goes there — ready to do what
+   * they have just read.
+   */
+  function done() {
+    if (ownScreen && Bridge.available) finish('done');
+    else goHome();
   }
 
   // ── Wiring ──────────────────────────────────────────────────────────────
@@ -679,8 +993,10 @@
 
       var arrow = target.closest('[data-slide]');
       if (arrow) {
-        var slides = arrow.closest('.slides');
-        showSlide(slides, currentSlide(slides) + Number(arrow.getAttribute('data-slide')));
+        var stepper = arrow.closest('.stepper');
+        var step = Number(arrow.getAttribute('data-slide'));
+        if (step > 0 && stepper.classList.contains('is-last')) done();
+        else showSlide(stepper, indexOf(stepper) + step);
         return;
       }
 
@@ -690,12 +1006,12 @@
       var video = target.closest('[data-video]');
       if (video) { playVideo(video); return; }
 
-      if (target.closest('[data-done]')) goHome();
+      if (target.closest('[data-done]')) done();
     });
 
     navBack.addEventListener('click', function () { pop(); });
     exitButton.addEventListener('click', function () { finish('skip'); });
-    cta.addEventListener('click', function () { finish('cta'); });
+    cta.addEventListener('click', onCta);
 
     document.addEventListener('keydown', function (event) {
       if (lightbox.isOpen()) {
@@ -703,7 +1019,7 @@
         return;
       }
       if (event.key === 'Escape') {
-        if (!pop() && Bridge.available) finish('skip');
+        if (!previous() && Bridge.available) finish('skip');
       }
     });
   }
@@ -955,7 +1271,7 @@
         lightbox.close();
         return true;
       }
-      return pop();
+      return previous();
     },
     closeImage: function () { lightbox.close(); },
     goTo: function (id) { return typeof id === 'string' ? push(id) : false; },
@@ -963,9 +1279,9 @@
     setTheme: function (theme) { applyTheme(theme); },
     getState: function () {
       var top = stack[stack.length - 1];
-      return { index: stack.length - 1, screen: top ? top.id : null, total: total, last: false, platform: platform };
+      return { index: depth(), screen: top ? top.id : null, total: total, last: false, platform: platform };
     },
-    // Kept for app versions that predate the screens; there is no next any more.
+    // Kept for app versions that predate the screens; the button does this now.
     next: function () { return false; },
   };
 
@@ -983,16 +1299,12 @@
 
     exitButton.hidden = !Bridge.available;
     if (isOnboarding) {
-      exitButton.innerHTML = '<span>' + escapeHtml(t('skip')) + '</span>';
+      exitButton.innerHTML = '<span>' + text('skip') + '</span>';
       exitButton.setAttribute('aria-label', t('skip'));
     } else {
       exitButton.innerHTML = icon('close');
       exitButton.setAttribute('aria-label', t('done'));
     }
-
-    ctaLabel.textContent = isOnboarding ? t('get_started') : t('done');
-    ctaIcon.innerHTML = ICONS[isOnboarding ? 'arrow' : 'check'];
-    ctaIcon.classList.toggle('is-directional', isOnboarding);
 
     app.classList.remove('is-loading');
   }
@@ -1007,5 +1319,5 @@
   var deepLink = params.get('screen');
   if (deepLink && deepLink !== firstScreen) push(deepLink, false);
 
-  Bridge.post({ type: 'ready', total: total, index: stack.length - 1, lang: lang, platform: platform });
+  Bridge.post({ type: 'ready', total: total, index: depth(), lang: lang, platform: platform });
 })();

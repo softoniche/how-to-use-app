@@ -12,7 +12,9 @@
   --on-surface-variant: #364153;
   --on-surface-variant-low: #919eab;
   --outline: #c4cdd5;
-  --shadow: 0 1px 2px rgba(15, 20, 25, 0.04), 0 8px 24px rgba(15, 20, 25, 0.05);
+  --outline-soft: #e3e8ee;
+  --shadow: 0 1px 2px rgba(15, 20, 25, 0.04), 0 8px 24px rgba(15, 20, 25, 0.06);
+  --shadow-float: 0 8px 22px rgba(15, 20, 25, 0.14);
 
   --primary: #4bbb53;
   --primary-bold: #298331;
@@ -30,6 +32,10 @@
   --info-soft: #ebf5ff;
   --info-rgb: 61, 143, 230;
 
+  /* The ground the pictures of the app stand on. */
+  --stage: #edf6ee;
+  --stage-dot: rgba(75, 187, 83, 0.16);
+
   /* Set per screen from its tone, then used by everything inside it. The rgb
      triplet is what the translucent pills and borders are mixed from — spelled
      out rather than colour-mixed, which older WebViews do not understand. */
@@ -40,6 +46,7 @@
 
   --radius-card: 18px;
   --radius-tile: 20px;
+  --radius-panel: 24px;
   --page-max: 640px;
   --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
   /* Which way "forward" is. Screens slide in from the end of the line, so in
@@ -58,7 +65,9 @@
   --on-surface-variant: #dfe3e8;
   --on-surface-variant-low: #c4cdd5;
   --outline: #364153;
+  --outline-soft: #232a35;
   --shadow: none;
+  --shadow-float: 0 8px 22px rgba(0, 0, 0, 0.5);
 
   --primary: #4bbb53;
   --primary-bold: #77ce7a;
@@ -73,6 +82,9 @@
   --info-bold: #7abdff;
   --info-soft: #10273f;
   --info-rgb: 82, 165, 255;
+
+  --stage: #0b1a0e;
+  --stage-dot: rgba(75, 187, 83, 0.14);
   color-scheme: dark;
 }
 
@@ -135,30 +147,30 @@ svg { display: block; }
   height: 100dvh;
   /* The app hands the page a safe area already, but a browser does not. */
   padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  opacity: 1;
+  transition: opacity 0.25s ease;
 }
 
 .app.is-loading { opacity: 0; }
-.app { opacity: 1; transition: opacity 0.25s ease; }
 
 /* ── Top bar ────────────────────────────────────────────────────────────── */
 
-/* Tight to the top on a phone, where the browser's own bar is right above it
-   and every pixel of the screen is wanted for reading; tablets get the room
-   back in the 600px block at the bottom. */
+/* Tight to the top on a phone, where every pixel of the screen is wanted for
+   reading; tablets get the room back in the 600px block at the bottom. */
 .topbar { flex: none; padding: 6px 20px 4px; }
 
 .topbar__row {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 40px;
+  min-height: 44px;
   max-width: var(--page-max);
   margin: 0 auto;
 }
 
 .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.brand__logo { width: 30px; height: 30px; border-radius: 9px; display: block; }
-.brand__name { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.brand__logo { width: 32px; height: 32px; border-radius: 10px; display: block; box-shadow: var(--shadow); }
+.brand__name { font-size: 17px; font-weight: 800; letter-spacing: -0.015em; white-space: nowrap; }
 
 /* On an inner screen the brand steps aside for the way back, so the row keeps
    its height and nothing shifts sideways. */
@@ -186,7 +198,7 @@ svg { display: block; }
   color: var(--on-surface-variant);
   font-size: 14px;
   font-weight: 600;
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-radius: 12px;
   transition: background-color 0.15s ease;
 }
@@ -205,6 +217,7 @@ svg { display: block; }
 .screen {
   position: absolute;
   inset: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
@@ -220,40 +233,41 @@ svg { display: block; }
 .screen__inner {
   max-width: var(--page-max);
   margin: 0 auto;
-  padding: 20px 20px 28px;
+  padding: 16px 20px 28px;
+}
+
+/* Every block on a screen is spaced the same; a block that hides itself (a
+   video not uploaded yet) takes its gap with it. */
+.screen__body { display: flex; flex-direction: column; gap: 24px; }
+.screen__header + .screen__body { margin-top: 22px; }
+
+.block__label {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.015em;
 }
 
 /* ── Screen header ──────────────────────────────────────────────────────── */
 
 .screen__badge {
-  width: 56px;
-  height: 56px;
+  width: 54px;
+  height: 54px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: 17px;
   background: var(--accent-soft);
   border: 1px solid rgba(var(--accent-rgb), 0.28);
   color: var(--accent-bold);
   margin-bottom: 16px;
 }
-.screen__badge .icon { width: 27px; height: 27px; }
-
-.screen__kicker {
-  display: inline-block;
-  padding: 4px 11px;
-  border-radius: 20px;
-  background: rgba(var(--accent-rgb), 0.16);
-  color: var(--accent-bold);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
+.screen__badge .icon { width: 26px; height: 26px; }
 
 .screen__title {
-  margin: 12px 0 0;
-  font-size: 25px;
-  line-height: 1.22;
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.2;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -265,13 +279,444 @@ svg { display: block; }
   color: var(--on-surface-variant);
 }
 
-.screen__body { margin-top: 22px; }
+.screen__meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  background: var(--surface-variant-low);
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  font-weight: 600;
+}
+.screen__meta .icon { width: 15px; height: 15px; }
+
+/* ── Hero: the promise, in one line ─────────────────────────────────────── */
+
+.hero { position: relative; }
+
+.hero__pill {
+  display: inline-block;
+  margin-bottom: 12px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.14);
+  color: var(--accent-bold);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.hero__title {
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.14;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+
+.hero__subtitle {
+  margin: 12px 0 0;
+  font-size: 16.5px;
+  line-height: 1.5;
+  color: var(--on-surface-variant);
+}
+
+.hero__badges { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; padding: 0; list-style: none; }
+.hero__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 11px 6px 9px;
+  padding-inline: 9px 11px;
+  border-radius: 999px;
+  background: rgba(var(--success-rgb), 0.1);
+  border: 1px solid rgba(var(--success-rgb), 0.22);
+  color: var(--success-bold);
+  font-size: 13px;
+  font-weight: 600;
+}
+.hero__badge .icon { flex: none; width: 16px; height: 16px; stroke-width: 2; }
+
+/* ── The story: first launch, one page at a time ────────────────────────── */
+
+/* The story is the screen: it fills it, and each page scrolls on its own if a
+   small phone cannot fit it. */
+.screen--story { overflow: hidden; }
+.screen--story .screen__inner { height: 100%; max-width: none; padding: 0; }
+.screen--story .screen__body { height: 100%; gap: 0; }
+
+.story { display: flex; flex-direction: column; height: 100%; }
+
+.story__track {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.story__track::-webkit-scrollbar { display: none; }
+
+.story__page {
+  flex: none;
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+}
+
+.story__content {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: var(--page-max);
+  margin: 0 auto;
+  padding: 10px 20px 16px;
+}
+
+.story__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 250px;
+  height: clamp(210px, 36dvh, 330px);
+  padding: 20px;
+  border-radius: 28px;
+  background-color: var(--stage);
+  background-image: radial-gradient(var(--stage-dot) 1.2px, transparent 1.4px);
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+.story__stage .demo { max-width: 330px; }
+
+/* The words of a page arrive a moment after the page does. */
+.story__page .hero { opacity: 0.3; transform: translate3d(0, 10px, 0); transition: opacity 0.45s ease, transform 0.45s var(--ease); }
+.story__page.is-active .hero { opacity: 1; transform: none; }
+
+.story__dots { flex: none; display: flex; justify-content: center; gap: 6px; padding: 4px 0 2px; }
+.story__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 4px;
+  background: var(--outline);
+  transition: width 0.3s var(--ease), background-color 0.3s ease;
+}
+.story__dot.is-active { width: 22px; background: var(--primary); }
+
+/* ── Showcase: what the app does, each with its picture ─────────────────── */
+
+.showcase { display: grid; grid-template-columns: 1fr; gap: 14px; }
+
+.feature {
+  display: block;
+  width: 100%;
+  padding: 0;
+  text-align: start;
+  overflow: hidden;
+  background: var(--surface-container);
+  border: 1px solid var(--outline-soft);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+  transition: transform 0.14s ease, border-color 0.15s ease;
+}
+.feature:active { transform: scale(0.985); border-color: rgba(var(--accent-rgb), 0.5); }
+
+.feature__stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 180px;
+  padding: 16px;
+  background-color: var(--stage);
+  background-image: radial-gradient(var(--stage-dot) 1.2px, transparent 1.4px);
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+
+.feature__body { display: flex; align-items: center; gap: 12px; padding: 14px 16px 16px; }
+.feature__text { flex: 1; min-width: 0; }
+.feature__text > span { display: block; }
+.feature__title { font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+.feature__desc { margin-top: 3px; font-size: 14px; line-height: 1.45; color: var(--on-surface-variant); }
+.feature__go {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-bold);
+}
+.feature__go .icon { width: 18px; height: 18px; stroke-width: 2; }
+[dir='rtl'] .feature__go .icon { transform: scaleX(-1); }
+
+/* ── The pictures of the app ────────────────────────────────────────────── */
+
+/* Each is a loop: the chat as the user knows it, then what the app keeps of
+   it, held long enough to read, then round again. The resting style of every
+   part is the end of that story, so with motion switched off it is simply
+   shown finished. A picture off screen holds still (app.js marks the ones on
+   screen `is-live`). */
+.demo {
+  --cycle: 7s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  max-width: 300px;
+}
+.demo:not(.is-live) *,
+.screen.is-hidden .demo * { animation-play-state: paused !important; }
+
+.demo__img { display: block; max-width: 100%; height: auto; user-select: none; -webkit-user-drag: none; }
+
+.demo__bubble { width: 100%; border-radius: 12px; box-shadow: var(--shadow-float); }
+.demo__bubble--wide { border-radius: 11px; }
+.demo--view_once .demo__swap { width: 72%; }
+
+/* Two pictures in the same place, the second one fading in over the first. */
+.demo__swap { display: grid; }
+.demo__swap > * { grid-area: 1 / 1; }
+.demo__swap-in { opacity: 0; animation: demo-swap-in calc(var(--cycle) * 2) ease infinite; }
+
+.demo__arrow { display: block; color: var(--primary); }
+.demo__arrow .icon { width: 20px; height: 20px; stroke-width: 2.2; }
+
+.demo__card {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 9px 12px 10px;
+  border-radius: 14px;
+  background: var(--surface-container);
+  border: 1.5px solid var(--primary);
+  box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.22);
+  text-align: start;
+}
+.demo__card--row { flex-direction: row; align-items: center; gap: 11px; width: 84%; }
+.demo__card-text { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+
+.demo__tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--primary-bold);
+  font-size: 12px;
+  font-weight: 700;
+}
+.demo__tag .icon { flex: none; width: 14px; height: 14px; stroke-width: 2.2; }
+.demo__text { color: var(--on-surface); font-size: 14.5px; font-weight: 500; line-height: 1.35; }
+
+.demo__reveal { animation: demo-reveal var(--cycle) var(--ease) infinite; }
+.demo__arrow.demo__reveal { animation-name: demo-arrow; }
+
+.demo__thumb {
+  position: relative;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #7cc4ff 0%, #a78bfa 55%, #f472b6 100%);
+}
+/* A hill under the sky, so the square reads as a photo. */
+.demo__thumb::after {
+  content: '';
+  position: absolute;
+  inset-inline: -20%;
+  bottom: -34%;
+  height: 72%;
+  border-radius: 50% 50% 0 0;
+  background: rgba(255, 255, 255, 0.4);
+}
+.demo__play { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: #fff; }
+.demo__play .icon { width: 18px; height: 18px; fill: currentColor; }
+
+.demo__again {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 700;
+  animation: demo-pulse var(--cycle) ease infinite;
+}
+.demo__again .icon { width: 15px; height: 15px; stroke-width: 2.1; }
+
+/* A status, about to be saved. */
+.status-mock {
+  position: relative;
+  display: block;
+  width: 100%;
+  max-width: 250px;
+  height: 148px;
+  border-radius: 18px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #ffb36b 0%, #ff6f91 52%, #8b5cf6 100%);
+  box-shadow: var(--shadow-float);
+}
+.status-mock i { display: block; }
+.status-mock__bars { position: absolute; top: 9px; inset-inline: 10px; display: flex; gap: 4px; }
+.status-mock__bars i { flex: 1; height: 3px; border-radius: 2px; background: rgba(255, 255, 255, 0.45); }
+.status-mock__bars i:first-child { background: #fff; }
+.status-mock__who { position: absolute; top: 20px; inset-inline-start: 10px; display: flex; align-items: center; gap: 7px; }
+.status-mock__avatar { width: 24px; height: 24px; border-radius: 50%; background: rgba(255, 255, 255, 0.9); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.35); }
+.status-mock__name { width: 58px; height: 7px; border-radius: 4px; background: rgba(255, 255, 255, 0.8); }
+.status-mock__sun {
+  position: absolute;
+  top: 40px;
+  inset-inline-end: 28px;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 0 12px rgba(255, 255, 255, 0.12);
+}
+.status-mock__save {
+  position: absolute;
+  inset-inline: 12px;
+  bottom: 12px;
+  display: grid;
+  height: 36px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  animation: demo-save var(--cycle) ease infinite;
+}
+.status-mock__save > span { grid-area: 1 / 1; display: flex; align-items: center; justify-content: center; gap: 6px; white-space: nowrap; }
+.status-mock__save .icon { width: 17px; height: 17px; stroke-width: 2.2; }
+.status-mock__idle { opacity: 0; animation: demo-idle var(--cycle) ease infinite; }
+.status-mock__done { animation: demo-done var(--cycle) ease infinite; }
+
+/* Blue ticks, and the switch that quietens them. */
+.demo--ticks { flex-direction: row; justify-content: center; gap: 18px; --cycle: 3.5s; }
+.demo__ticks { flex: none; width: 88px; }
+.demo__ticks img { border-radius: 50%; box-shadow: var(--shadow-float); }
+/* At rest the switch is on, so the ticks it quietens are the ones shown. */
+.demo__ticks .demo__swap-in { opacity: 1; }
+.demo__toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: var(--surface-container);
+  box-shadow: var(--shadow-float);
+}
+.demo__toggle-label { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.demo__toggle-label .icon { width: 16px; height: 16px; color: var(--primary-bold); }
+.demo__switch {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--primary);
+  animation: demo-switch calc(var(--cycle) * 2) ease infinite;
+}
+.demo__knob {
+  position: absolute;
+  top: 3px;
+  inset-inline-start: 3px;
+  display: block;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+  transform: translateX(calc(var(--dir) * 18px));
+  animation: demo-knob calc(var(--cycle) * 2) ease infinite;
+}
+
+/* The promise that nothing leaves the phone. */
+.demo__shield {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--primary), var(--success-bold));
+  color: #fff;
+  box-shadow: 0 0 0 14px rgba(var(--primary-rgb), 0.14), 0 0 0 30px rgba(var(--primary-rgb), 0.07);
+  animation: demo-glow 3.2s ease-in-out infinite;
+}
+.demo__shield .icon { width: 52px; height: 52px; stroke-width: 1.8; }
+
+@keyframes demo-reveal {
+  0%, 22% { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.96); }
+  32%, 92% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translate3d(0, -10px, 0) scale(0.96); }
+}
+@keyframes demo-arrow {
+  0%, 16% { opacity: 0; transform: translate3d(0, -6px, 0); }
+  26%, 92% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+@keyframes demo-swap-in {
+  0%, 44% { opacity: 0; }
+  50%, 94% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@keyframes demo-pulse {
+  0%, 40%, 60%, 100% { transform: none; }
+  50% { transform: scale(1.07); }
+}
+@keyframes demo-save {
+  0%, 30% { background-color: rgba(15, 20, 25, 0.45); transform: none; }
+  36% { background-color: rgba(15, 20, 25, 0.45); transform: scale(0.94); }
+  42%, 94% { background-color: var(--primary); transform: none; }
+  100% { background-color: rgba(15, 20, 25, 0.45); }
+}
+@keyframes demo-idle {
+  0%, 36% { opacity: 1; }
+  42%, 94% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes demo-done {
+  0%, 36% { opacity: 0; transform: translate3d(0, 6px, 0); }
+  44%, 94% { opacity: 1; transform: none; }
+  100% { opacity: 0; }
+}
+@keyframes demo-switch {
+  0%, 44% { background-color: var(--outline); }
+  50%, 94% { background-color: var(--primary); }
+  100% { background-color: var(--outline); }
+}
+@keyframes demo-knob {
+  0%, 44% { transform: none; }
+  50%, 94% { transform: translateX(calc(var(--dir) * 18px)); }
+  100% { transform: none; }
+}
+@keyframes demo-glow {
+  0%, 100% { box-shadow: 0 0 0 14px rgba(var(--primary-rgb), 0.14), 0 0 0 30px rgba(var(--primary-rgb), 0.07); }
+  50% { box-shadow: 0 0 0 18px rgba(var(--primary-rgb), 0.18), 0 0 0 38px rgba(var(--primary-rgb), 0.05); }
+}
 
 /* ── Cards ──────────────────────────────────────────────────────────────── */
 
 .card {
   background: var(--surface-container);
-  border: 1px solid var(--outline);
+  border: 1px solid var(--outline-soft);
   border-radius: var(--radius-card);
   box-shadow: var(--shadow);
 }
@@ -291,18 +736,9 @@ svg { display: block; }
 .card__title { font-size: 16px; font-weight: 600; margin: 0; }
 .card__desc { margin: 3px 0 0; font-size: 14px; line-height: 1.45; color: var(--on-surface-variant); }
 
-/* ── Options: the questions the guide answers ───────────────────────────── */
+/* ── Options: big cards that open another screen ────────────────────────── */
 
 .options { display: flex; flex-direction: column; gap: 12px; }
-
-.options__label {
-  margin: 26px 0 12px;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--on-surface-variant-low);
-}
 
 .option {
   display: flex;
@@ -310,53 +746,77 @@ svg { display: block; }
   gap: 14px;
   width: 100%;
   text-align: start;
-  padding: 15px 16px;
+  padding: 16px;
   background: var(--surface-container);
-  border: 1px solid var(--outline);
+  border: 1px solid var(--outline-soft);
   border-radius: var(--radius-tile);
   box-shadow: var(--shadow);
   transition: transform 0.14s ease, border-color 0.15s ease;
 }
 .option:active { transform: scale(0.985); border-color: rgba(var(--accent-rgb), 0.55); }
-.option .card__icon { width: 46px; height: 46px; border-radius: 14px; }
+.option .card__icon { width: 48px; height: 48px; border-radius: 15px; }
 .option .card__icon .icon { width: 24px; height: 24px; }
 .option__text { min-width: 0; }
 /* The label and its line are spans inside a button, so they need telling. */
 .option__text > span { display: block; }
 .option__title { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 
+.option__text > .option__badge {
+  display: inline-block;
+  margin-bottom: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+.option--accent { background: var(--accent-soft); border-color: rgba(var(--accent-rgb), 0.45); }
+.option--accent .card__icon { background: var(--accent); color: var(--on-primary); }
+
 .option__go { flex: none; margin-inline-start: auto; color: var(--on-surface-variant-low); }
 .option__go .icon { width: 20px; height: 20px; }
 [dir='rtl'] .option__go .icon { transform: scaleX(-1); }
 
-/* ── The promise: what the app does not do ──────────────────────────────── */
+/* ── The promise: why it is safe ────────────────────────────────────────── */
 
 .trust {
-  margin-top: 28px;
-  padding: 16px;
-  border-radius: var(--radius-card);
-  background: rgba(var(--success-rgb), 0.07);
+  padding: 18px;
+  border-radius: var(--radius-panel);
+  background: linear-gradient(180deg, rgba(var(--success-rgb), 0.11), rgba(var(--success-rgb), 0.04));
   border: 1px solid rgba(var(--success-rgb), 0.25);
 }
 
-.trust__head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  color: var(--success-bold);
-  font-size: 14px;
-  font-weight: 700;
+.trust__head { display: flex; align-items: center; gap: 12px; margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.trust__badge {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: var(--success);
+  color: #fff;
 }
-.trust__head .icon { flex: none; width: 19px; height: 19px; }
+.trust__badge .icon { width: 23px; height: 23px; stroke-width: 2; }
 
-.trust__item { display: flex; gap: 10px; margin-top: 15px; }
-.trust__item .icon { flex: none; width: 17px; height: 17px; margin-top: 2px; color: var(--success-bold); }
-.trust__title { margin: 0; font-size: 14px; font-weight: 600; }
-.trust__desc { margin: 2px 0 0; font-size: 13px; line-height: 1.45; color: var(--on-surface-variant); }
+.trust__item { display: flex; gap: 12px; margin-top: 16px; }
+.trust__icon {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--surface-container);
+  color: var(--success-bold);
+}
+.trust__icon .icon { width: 17px; height: 17px; stroke-width: 1.9; }
+.trust__title { margin: 0; font-size: 15px; font-weight: 700; }
+.trust__desc { margin: 2px 0 0; font-size: 14px; line-height: 1.45; color: var(--on-surface-variant); }
 
 /* ── Watch the video ────────────────────────────────────────────────────── */
-
-.video { margin-bottom: 22px; }
 
 .video__button {
   display: flex;
@@ -364,28 +824,27 @@ svg { display: block; }
   gap: 14px;
   width: 100%;
   text-align: start;
-  padding: 13px 16px 13px 13px;
-  padding-inline: 13px 16px;
+  padding: 12px;
+  padding-inline: 12px 16px;
   border-radius: var(--radius-tile);
-  background: var(--accent-soft);
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-soft);
+  box-shadow: var(--shadow);
   transition: transform 0.14s ease;
 }
 .video__button:active { transform: scale(0.985); }
 
 .video__play {
   flex: none;
-  width: 46px;
-  height: 46px;
-  border-radius: 50%;
+  width: 50px;
+  height: 50px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: var(--accent);
   color: var(--on-primary);
 }
 .video__play .icon { width: 22px; height: 22px; fill: currentColor; margin-inline-start: 2px; }
-
-.video__title { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
 
 .video__player {
   border-radius: var(--radius-tile);
@@ -402,6 +861,7 @@ svg { display: block; }
 }
 
 .video__error {
+  margin: 0;
   padding: 14px 16px;
   border-radius: var(--radius-tile);
   background: var(--surface-variant-low);
@@ -410,17 +870,26 @@ svg { display: block; }
   text-align: center;
 }
 
-/* ── Slides: one screenshot at a time, swiped or stepped through ────────── */
+/* ── Stepper: one screenshot at a time ──────────────────────────────────── */
 
-/* The strip runs past the text column to the edges of the screen, and is
-   padded so that every picture — the first and the last too — stops in the
-   middle, with its neighbours peeking in on either side. */
+.stepper {
+  padding: 14px;
+  border-radius: var(--radius-panel);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-soft);
+  box-shadow: var(--shadow);
+}
+
+.stepper__head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.stepper__count { flex: none; font-size: 13.5px; font-weight: 700; color: var(--accent-bold); }
+.stepper__bar { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-variant-low); overflow: hidden; }
+.stepper__fill { display: block; height: 100%; border-radius: 3px; background: var(--accent); transition: width 0.3s var(--ease); }
+
 .slides__track {
   display: flex;
-  gap: 12px;
-  margin: 0 -20px;
-  padding: 4px 20px 18px;
-  padding: 4px calc(50% - min(39vw, 150px) + 20px) 18px;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
   list-style: none;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -432,86 +901,90 @@ svg { display: block; }
 
 .slide {
   flex: none;
-  width: 78vw;
-  width: min(78vw, 300px);
-  padding: 10px;
-  background: var(--surface-container);
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-tile);
-  box-shadow: var(--shadow);
+  width: 100%;
   scroll-snap-align: center;
   /* One swipe, one step: a quick flick never skips a tap the user needs. */
   scroll-snap-stop: always;
-  opacity: 0.5;
-  transition: opacity 0.25s ease;
 }
-.slide.is-active { opacity: 1; }
 
-/* The phone's screen, standing on the accent. */
+/* The phone's screen, in a phone, standing on the accent. */
 .slide .shot {
   margin: 0;
-  padding: 14px;
+  padding: 14px 0;
   border: 0;
-  background: var(--accent-soft);
+  border-radius: 18px;
+  background-color: var(--stage);
+  background-image: radial-gradient(var(--stage-dot) 1.2px, transparent 1.4px);
+  background-size: 16px 16px;
   text-align: center;
 }
 .slide .shot img {
   display: inline-block;
   vertical-align: top;
   width: auto;
-  height: 380px;
-  height: min(50dvh, 420px);
+  height: 340px;
+  height: min(44dvh, 400px);
   max-height: none;
-  border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(15, 20, 25, 0.16);
+  border-radius: 20px;
+  border: 5px solid #12161b;
+  box-shadow: 0 12px 26px rgba(15, 20, 25, 0.22);
 }
 /* Up over the status bar, where it hides nothing the step is about. */
-.slide .shot__hint { inset-block-start: 8px; inset-block-end: auto; }
+.slide .shot__hint { inset-block-start: 10px; inset-block-end: auto; }
 
+/* Two lines held open, so a short instruction does not lift its picture above
+   the neighbours'. */
 .slide__text {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  margin: 12px 2px 2px;
-  font-size: 15px;
+  min-height: 2.8em;
+  margin: 0 2px 12px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.4;
 }
-.slide__text .step__num { width: 26px; height: 26px; margin-top: -2px; font-size: 12.5px; }
 
-.slides__nav { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* The way on stays in reach while the steps are on screen, however tall the
+   picture is on a short phone. */
+.stepper__nav {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  gap: 10px;
+  margin: 2px -14px -14px;
+  padding: 12px 14px 14px;
+  border-radius: 0 0 var(--radius-panel) var(--radius-panel);
+  background: var(--surface-container);
+}
 
-.slides__arrow {
-  flex: none;
-  width: 46px;
-  height: 46px;
-  display: grid;
-  place-items: center;
-  border-radius: 50%;
-  background: var(--primary);
-  color: var(--on-primary);
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 52px;
+  padding: 0 18px;
+  border-radius: 15px;
+  font-size: 15.5px;
+  font-weight: 700;
   transition: transform 0.12s ease, opacity 0.2s ease;
 }
-.slides__arrow.is-back { background: var(--surface-container); color: var(--on-surface); border: 1px solid var(--outline); }
-.slides__arrow:active { transform: scale(0.94); }
-.slides__arrow:disabled { opacity: 0.35; cursor: default; transform: none; }
-.slides__arrow .icon { width: 22px; height: 22px; stroke-width: 2; }
-/* The chevron points onwards; back points the other way, and in Arabic both swap. */
-.slides__arrow.is-back .icon,
-[dir='rtl'] .slides__arrow .icon { transform: scaleX(-1); }
-[dir='rtl'] .slides__arrow.is-back .icon { transform: none; }
+.btn:active { transform: scale(0.97); }
+.btn:disabled { opacity: 0.4; cursor: default; transform: none; }
+.btn .icon { width: 20px; height: 20px; stroke-width: 2; }
+.btn--quiet { flex: none; width: 52px; padding: 0; background: var(--surface-variant-low); color: var(--on-surface); }
+.btn--primary { flex: 1; background: var(--primary); color: var(--on-primary); }
 
-.slides__dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; min-width: 0; }
-.slides__dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 4px;
-  background: var(--outline);
-  transition: width 0.25s var(--ease), background-color 0.25s ease;
-}
-.slides__dot.is-active { width: 20px; background: var(--accent); }
+/* The chevrons point onwards; back points the other way, and in Arabic both swap. */
+.btn .icon.is-back,
+[dir='rtl'] .btn .icon.is-forward { transform: scaleX(-1); }
+[dir='rtl'] .btn .icon.is-back { transform: none; }
+
+.stepper.is-last .when-next,
+.stepper:not(.is-last) .when-done { display: none; }
 
 /* ── Steps: numbered, tied together by a thread ─────────────────────────── */
+
+.steps-block { display: flex; flex-direction: column; gap: 14px; }
 
 .steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
 
@@ -520,30 +993,30 @@ svg { display: block; }
 .step:not(:last-child)::before {
   content: '';
   position: absolute;
-  top: 34px;
+  top: 36px;
   bottom: -24px;
-  inset-inline-start: 14px;
-  width: 1.5px;
-  background: var(--outline);
+  inset-inline-start: 15px;
+  width: 2px;
+  border-radius: 1px;
+  background: rgba(var(--accent-rgb), 0.25);
 }
 
 .step__num {
   position: relative;
   flex: none;
-  width: 29px;
-  height: 29px;
+  width: 32px;
+  height: 32px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--accent-soft);
-  border: 1px solid rgba(var(--accent-rgb), 0.35);
-  color: var(--accent-bold);
-  font-size: 13px;
-  font-weight: 700;
+  background: var(--accent);
+  color: var(--on-primary);
+  font-size: 14px;
+  font-weight: 800;
 }
 
-.step__body { min-width: 0; padding-top: 3px; }
-.step__body .card__title { font-size: 15.5px; font-weight: 700; }
+.step__body { min-width: 0; padding-top: 4px; }
+.step__body .card__title { font-size: 16px; font-weight: 700; }
 
 /* ── List: icon + title + description rows ──────────────────────────────── */
 
@@ -551,23 +1024,13 @@ svg { display: block; }
 .list .card { display: flex; gap: 13px; padding: 15px; align-items: flex-start; }
 .list__text { min-width: 0; }
 
-/* ── Grid: small tiles, icon and title only ─────────────────────────────── */
-
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
-.grid .card { padding: 14px; border-radius: var(--radius-tile); }
-.grid .card__icon { width: 36px; height: 36px; border-radius: 11px; }
-.grid .card__icon .icon { width: 19px; height: 19px; }
-/* A fixed gap, not a spacer: every label starts at the same height, so a
-   one-line title and a two-line one still line up across the row. */
-.grid .card__title { margin-top: 12px; font-size: 14px; line-height: 1.25; }
-
 /* ── Screenshots ────────────────────────────────────────────────────────── */
 
 .shot {
   position: relative;
   margin-top: 13px;
   border-radius: 14px;
-  border: 1px solid var(--outline);
+  border: 1px solid var(--outline-soft);
   background: var(--surface-variant-low);
   overflow: hidden;
   display: block;
@@ -601,22 +1064,62 @@ svg { display: block; }
 }
 .shot__hint .icon { width: 15px; height: 15px; }
 
-/* A screenshot on its own, under the steps it illustrates. */
-.block--shot .shot { margin-top: 22px; }
+.block--shot .shot { margin-top: 0; }
 
-/* ── The closing tip ────────────────────────────────────────────────────── */
+/* ── Notes ──────────────────────────────────────────────────────────────── */
 
 .note {
   display: flex;
   gap: 12px;
-  margin-top: 22px;
   padding: 14px 15px;
   border-radius: var(--radius-card);
   background: var(--surface-variant-low);
 }
 .note .icon { flex: none; width: 20px; height: 20px; margin-top: 1px; color: var(--on-surface-variant); }
-.note__title { margin: 0; font-size: 14px; font-weight: 700; }
-.note__desc { margin: 3px 0 0; font-size: 13.5px; line-height: 1.45; color: var(--on-surface-variant); }
+.note__title { margin: 0; font-size: 14.5px; font-weight: 700; }
+.note__desc { margin: 3px 0 0; font-size: 14px; line-height: 1.45; color: var(--on-surface-variant); }
+
+/* Reassurance rather than a tip: the same green as the promise on the start. */
+.note--safe { background: rgba(var(--success-rgb), 0.09); border: 1px solid rgba(var(--success-rgb), 0.25); }
+.note--safe .icon { color: var(--success-bold); stroke-width: 2; }
+
+/* ── Questions ──────────────────────────────────────────────────────────── */
+
+.faq { display: flex; flex-direction: column; gap: 12px; }
+
+.faq__list {
+  border-radius: var(--radius-tile);
+  background: var(--surface-container);
+  border: 1px solid var(--outline-soft);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.faq__item + .faq__item { border-top: 1px solid var(--outline-soft); }
+
+.faq__q {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 15px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.faq__q::-webkit-details-marker { display: none; }
+.faq__q:active { background: var(--surface-variant-low); }
+.faq__chevron {
+  flex: none;
+  margin-inline-start: auto;
+  width: 18px;
+  height: 18px;
+  color: var(--on-surface-variant-low);
+  transform: rotate(90deg);
+  transition: transform 0.2s var(--ease);
+}
+.faq__item[open] .faq__chevron { transform: rotate(-90deg); }
+.faq__a { margin: -4px 0 0; padding: 0 16px 16px; font-size: 14.5px; line-height: 1.5; color: var(--on-surface-variant); }
 
 /* ── Buttons ────────────────────────────────────────────────────────────── */
 
@@ -626,20 +1129,22 @@ svg { display: block; }
   justify-content: center;
   gap: 8px;
   width: 100%;
-  padding: 16px 26px;
+  min-height: 54px;
+  padding: 15px 26px;
   border-radius: 16px;
   background: var(--primary);
   color: var(--on-primary);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
+  box-shadow: 0 8px 20px rgba(var(--primary-rgb), 0.3);
   transition: transform 0.12s ease, filter 0.15s ease;
 }
 .cta:active { transform: scale(0.97); filter: brightness(0.95); }
-.cta .icon { width: 19px; height: 19px; stroke-width: 2; }
+.cta .icon { width: 20px; height: 20px; stroke-width: 2; }
+[data-theme='dark'] .cta { box-shadow: none; }
 
-/* The way back to the question, at the end of what the user came to read. */
-.done { margin-top: 28px; }
-.done .cta { background: var(--surface-container); color: var(--on-surface); border: 1px solid var(--outline); }
+/* The way back to the start, at the end of what the user came to read. */
+.done .cta { background: var(--surface-container); color: var(--on-surface); border: 1px solid var(--outline); box-shadow: none; }
 .done .cta .icon { color: var(--primary); }
 
 .bottombar {
@@ -718,58 +1223,60 @@ svg { display: block; }
   body { font-size: 16px; }
   :root { --page-max: 700px; }
   .topbar { padding: 18px 28px 4px; }
-  .screen__inner { padding: 26px 28px 32px; }
-  .screen__badge { width: 64px; height: 64px; border-radius: 21px; }
-  .screen__badge .icon { width: 31px; height: 31px; }
+  .screen__inner { padding: 22px 28px 32px; }
+  .story__content { padding: 16px 28px 20px; }
+  .screen__badge { width: 62px; height: 62px; border-radius: 20px; }
+  .screen__badge .icon { width: 30px; height: 30px; }
   .screen__title { font-size: 31px; }
   .screen__subtitle { font-size: 17px; }
+  .hero__title { font-size: 36px; }
+  .hero__subtitle { font-size: 18px; }
   .bottombar { padding: 12px 28px 22px; }
-  .grid { grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; }
-  .grid .card__title { font-size: 15px; }
+  .showcase { grid-template-columns: 1fr 1fr; }
   .card__title { font-size: 17px; }
   .card__desc { font-size: 15px; }
   .option__title { font-size: 17px; }
-  .brand__logo { width: 34px; height: 34px; border-radius: 10px; }
-  .brand__name { font-size: 18px; }
+  .brand__logo { width: 36px; height: 36px; border-radius: 11px; }
+  .brand__name { font-size: 19px; }
   .shot img { max-height: 400px; max-height: min(38dvh, 420px); }
-  /* The column's gutter is wider here, so the strip reaches further — and no
-     longer to the edge of the screen, so its ends fade out instead of cutting
-     a picture in half. */
-  .slides__track {
-    margin: 0 -28px;
-    padding: 4px calc(50% - 150px + 28px) 18px;
-    -webkit-mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
-    mask-image: linear-gradient(90deg, transparent, #000 28px, #000 calc(100% - 28px), transparent);
-  }
-  .slide__text { font-size: 16px; }
+  .slide__text { font-size: 17px; }
 }
 
 @media (min-width: 900px) {
   :root { --page-max: 860px; }
   .screen__title { font-size: 34px; }
-  .screen__inner { padding: 36px 36px 36px; }
-  .grid { grid-template-columns: repeat(4, 1fr); }
-  .options { flex-direction: row; }
+  .screen__inner { padding: 32px 36px 36px; }
+  .options { flex-direction: row; flex-wrap: wrap; }
+  .options .block__label { flex-basis: 100%; }
   .options .option { flex: 1; }
-  /* Roomy enough to read the instruction beside its screenshot. */
   .list .card { padding: 18px; }
   .shot img { max-height: 440px; max-height: min(46dvh, 460px); }
-  .slides__track { margin: 0 -36px; padding: 4px calc(50% - 150px + 36px) 18px; }
 }
 
-/* Landscape phones have no room for the full header. */
+/* Landscape phones have no room for the full header, or a tall picture. */
 @media (max-height: 480px) and (max-width: 900px) {
   .screen__badge { width: 44px; height: 44px; border-radius: 14px; margin-bottom: 12px; }
   .screen__badge .icon { width: 23px; height: 23px; }
   .screen__title { font-size: 20px; }
-  .screen__subtitle { font-size: 14px; }
-  .screen__body { margin-top: 16px; }
+  .hero__title { font-size: 22px; }
+  .screen__subtitle,
+  .hero__subtitle { font-size: 14px; }
   .screen__inner { padding: 14px 20px 20px; }
-  .cta { padding: 12px 20px; }
+  .story__stage { height: 170px; }
+  .cta { min-height: 44px; padding: 10px 20px; }
+}
+
+/* Small phones: the picture gives way to the words. */
+@media (max-height: 640px) {
+  .story__stage { height: 190px; }
+  .story__content { gap: 16px; }
+  .hero__title { font-size: 26px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; }
+  /* Shown finished, not frozen at the start of its story. */
+  .demo * { animation: none !important; }
 }
 
 /* Right-to-left languages read the other way, so the arrow that points onwards
