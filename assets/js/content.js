@@ -1,7 +1,7 @@
 // The guide itself: which screens exist and what is on them.
 //
 // It opens in one of two ways. On a fresh install (`mode=onboarding`) it is a
-// short story — `welcome`, a few swipeable pages, each showing one thing the app
+// short story — `welcome`, five swipeable pages, each showing one thing the app
 // does, ending on "Get started". Opened later from Settings it is `home`, one
 // page to scroll: what the app does, how it works, and why it is safe. Both lead
 // to connecting an account, which is its own set of screens. Every piece of text
@@ -21,7 +21,7 @@
 //          filled in instead, so the two phones are shown their own pictures.
 //
 // Blocks, in the order they are drawn:
-//   story     swipeable full-height pages, each with a picture and its own blocks
+//   story     swipeable full-height pages: a scene, a title and one line
 //   hero      a big heading, its sentence, and small reassurance badges
 //   showcase  feature cards, each with a live picture of what the app does
 //   options   big tappable cards that open another screen (`go`)
@@ -35,8 +35,8 @@
 //   faq       questions that open to their answer
 //   done      the "Got it" button that returns to where reading started
 //
-// Pictures (`demo` on a showcase item, `stage` on a story page) are drawn by
-// app.js: deleted · view_once · status · ticks · shield.
+// Scenes (`scene` on a story page or a showcase item) are drawn by app.js:
+// deleted · view_once · status · ticks · privacy.
 
 window.GUIDE_CONTENT = (function () {
   // The three things to know before connecting, in order.
@@ -80,6 +80,10 @@ window.GUIDE_CONTENT = (function () {
 
     screens: {
       // ── First launch: one thing per page, then on to the app. ──
+      // Each page is a scene (drawn in app.js) over a two-line promise. In a
+      // title, the words between *stars* are painted in the accent colour.
+      // There is no "Skip": every page is seen once, and the last one also
+      // leads to connecting an account.
       welcome: {
         tone: 'primary',
         label: 'guide_title',
@@ -87,31 +91,12 @@ window.GUIDE_CONTENT = (function () {
           {
             type: 'story',
             pages: [
-              {
-                full: true,
-                stage: 'deleted',
-                blocks: [{ type: 'hero', pill: 'hero_title_lite', title: 'hero_title', subtitle: 'show_deleted_desc', badges: badges }],
-              },
-              {
-                full: true,
-                stage: 'view_once',
-                blocks: [{ type: 'hero', title: 'show_view_once_title', subtitle: 'show_view_once_desc' }],
-              },
-              {
-                full: true,
-                stage: 'status',
-                blocks: [{ type: 'hero', title: 'feature_status_download', subtitle: 'show_status_desc' }],
-              },
-              {
-                full: true,
-                blocks: [{ type: 'hero', title: 'journey_title', subtitle: 'hero_subtitle' }, { type: 'steps', items: journey }, officialNote, connectOption],
-              },
-              // With the extra features off there is only the account to connect.
-              {
-                lite: true,
-                stage: 'shield',
-                blocks: [{ type: 'hero', title: 'hero_title_lite', subtitle: 'hero_subtitle_lite', badges: badges }, connectOption],
-              },
+              { full: true, scene: 'deleted', title: 'ob_deleted_title', subtitle: 'ob_deleted_desc' },
+              { full: true, scene: 'view_once', title: 'ob_view_once_title', subtitle: 'ob_view_once_desc' },
+              { full: true, scene: 'status', title: 'ob_status_title', subtitle: 'ob_status_desc' },
+              { full: true, scene: 'ticks', title: 'ob_ticks_title', subtitle: 'ob_ticks_desc' },
+              // With the extra features off this is the only page.
+              { scene: 'privacy', title: 'ob_privacy_title', subtitle: 'ob_privacy_desc', go: 'connect' },
             ],
           },
         ],
@@ -128,10 +113,10 @@ window.GUIDE_CONTENT = (function () {
             type: 'showcase',
             full: true,
             items: [
-              { demo: 'deleted', title: 'feature_deleted', desc: 'show_deleted_desc', go: 'saved' },
-              { demo: 'view_once', title: 'show_view_once_title', desc: 'show_view_once_desc', go: 'saved' },
-              { demo: 'status', title: 'feature_status_download', desc: 'show_status_desc', go: 'statuses' },
-              { demo: 'ticks', title: 'feature_ticks', desc: 'show_ticks_desc', go: 'toolbar' },
+              { scene: 'deleted', title: 'feature_deleted', desc: 'show_deleted_desc', go: 'saved' },
+              { scene: 'view_once', title: 'show_view_once_title', desc: 'show_view_once_desc', go: 'saved' },
+              { scene: 'status', title: 'feature_status_download', desc: 'show_status_desc', go: 'statuses' },
+              { scene: 'ticks', title: 'feature_ticks', desc: 'show_ticks_desc', go: 'toolbar' },
             ],
           },
           { type: 'steps', label: 'journey_title', full: true, items: journey },
@@ -318,5 +303,9 @@ window.GUIDE_ICONS = {
   'arrow-down': '<path d="M12 4.6v13.8"/><path d="M6.5 13l5.5 5.5 5.5-5.5"/>',
   close: '<path d="M6.2 6.2l11.6 11.6"/><path d="M17.8 6.2L6.2 17.8"/>',
   chevron: '<path d="M9.6 5.6l6.4 6.4-6.4 6.4"/>',
-  'zoom-in': '<circle cx="10.8" cy="10.8" r="6.6"/><path d="M15.6 15.6l4.4 4.4"/><path d="M10.8 8.2v5.2"/><path d="M8.2 10.8h5.2"/>',
+  'eye-off': '<path d="M10.6 6A9.8 9.8 0 0 1 12 5.8c5.4 0 9.2 6.2 9.2 6.2a16 16 0 0 1-2.4 3"/><path d="M6.4 7.6A16 16 0 0 0 2.8 12s3.8 6.2 9.2 6.2a9 9 0 0 0 4.4-1.2"/><path d="M3.5 3.5l17 17"/><path d="M10 10a2.7 2.7 0 0 0 4 4"/>',
+  ghost: '<path d="M5 20V11a7 7 0 0 1 14 0v9l-2.3-1.6L14.3 20 12 18.4 9.7 20l-2.4-1.6L5 20z"/><circle cx="9.5" cy="11" r="0.6"/><circle cx="14.5" cy="11" r="0.6"/>',
+  blocked: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+  'view-once': '<path d="M12 3a9 9 0 0 0 0 18"/><path d="M12 3a9 9 0 0 1 0 18" stroke-dasharray="1.6 3.2"/><path d="M11 9.5l1.5-1v7"/>',
+  'zoom-in':'<circle cx="10.8" cy="10.8" r="6.6"/><path d="M15.6 15.6l4.4 4.4"/><path d="M10.8 8.2v5.2"/><path d="M8.2 10.8h5.2"/>',
 };

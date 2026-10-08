@@ -19,8 +19,8 @@
      platform=android|ios    which recordings to show; read off the browser
                              when the app does not say
      screen=<id>     open on another screen, with the start behind it
-     mode=guide|onboarding   onboarding opens on the story, offers "Skip" and
-                             ends on "Get started"
+     mode=guide|onboarding   onboarding opens on the story, cannot be
+                             skipped, and ends on "Get started"
      theme=light|dark        defaults to the device setting
 
    Inside the app it also talks to Flutter: it reports where the user is over
@@ -58,7 +58,7 @@
   var platform = pickPlatform(params.get('platform'));
 
   function pickLanguage(requested) {
-    var known = Object.keys(I18N.skip || {});
+    var known = Object.keys(I18N.guide_title || {});
     var wanted = [requested, navigator.language, (navigator.languages || [])[0]];
     for (var i = 0; i < wanted.length; i++) {
       if (!wanted[i]) continue;
@@ -277,106 +277,198 @@
     if (started && started.catch) started.catch(function () { /* the controls are there */ });
   }
 
-  // ── The pictures of what the app does ───────────────────────────────────
+  // ── The scenes: what the app does, as a moment from a chat ──────────────
 
-  // Each one is a moment the user already knows from their chats — a message
-  // deleted, a photo that can only be opened once, a status about to vanish —
-  // next to what the app keeps of it. The chat side is a real screenshot; the
-  // app side is drawn here, so it reads in the user's own language.
+  // Each one is a moment the user already knows from WhatsApp — a message
+  // deleted, a photo that opens once, a status, blue ticks — and then what the
+  // app does about it. They are drawn here rather than shipped as screenshots:
+  // they read in the user's own language and cost nothing to download.
+  //
+  // A scene plays in beats. Every part marked `data-on="n"` switches on at
+  // beat n (app.js adds `is-on`; style.css says what that looks like), and the
+  // scene goes round again after its last beat.
 
-  function picture(src, extraClass) {
-    return '<img class="demo__img ' + (extraClass || '') + '" src="' + escapeHtml(src) + '" alt="" decoding="async">';
+  /** A translation with its *starred* words painted in the accent colour. */
+  function title(id) {
+    return text(id).replace(/\*([^*]+)\*/g, '<span class="hl">$1</span>');
   }
 
-  var DEMOS = {
+  /** Two labels in the same place: `a` until beat `on`, then `b`. */
+  function swap(a, b, on, extraClass) {
+    return (
+      '<span class="swap ' + (extraClass || '') + '">' +
+      '<span class="swap__b" data-on="' + on + '">' + b + '</span>' +
+      '<span class="swap__a">' + a + '</span>' +
+      '</span>'
+    );
+  }
+
+  function chatHead(name, tone) {
+    return (
+      '<span class="chat__head">' +
+      '<span class="avatar avatar--' + tone + '">' + name.charAt(0) + '</span>' +
+      '<span class="chat__who"><b>' + name + '</b><small>' + text('ob_online') + '</small></span>' +
+      '</span>'
+    );
+  }
+
+  function arrowDown(on) {
+    return '<span class="scene__arrow reveal" data-on="' + on + '">' + icon('arrow-down') + '</span>';
+  }
+
+  function photo(src, extraClass) {
+    return '<img class="' + extraClass + '" src="' + src + '" alt="" decoding="async" fetchpriority="low">';
+  }
+
+  /** How many beats each scene has before it starts again. */
+  var BEATS = { deleted: 4, view_once: 5, status: 4, ticks: 5, privacy: 1 };
+  var BEAT = 1300;
+
+  var SCENES = {
     deleted: function () {
       return (
-        picture('assets/img/features/deleted.jpg', 'demo__bubble demo__bubble--wide') +
-        '<span class="demo__arrow demo__reveal">' + icon('arrow-down') + '</span>' +
-        '<span class="demo__card demo__reveal">' +
-        '<span class="demo__tag">' + icon('restore') + text('demo_recovered') + '</span>' +
-        '<span class="demo__text">' + text('demo_deleted_text') + '</span>' +
+        chatHead('Sarah', 'tertiary') +
+        '<span class="chat__body">' +
+        '<span class="bubble">' + text('ob_chat_question') + '<small class="bubble__time">9:41</small></span>' +
+        '<span class="bubble bubble--deleted" data-on="1">' + icon('blocked') + '<i>' + text('ob_deleted_msg') + '</i><small class="bubble__time">9:42</small></span>' +
+        arrowDown(1) +
+        '<span class="kept reveal" data-on="1">' +
+        '<span class="kept__tag">' + icon('restore') + text('demo_recovered') + '</span>' +
+        '<span class="kept__text">' + text('demo_deleted_text') + '</span>' +
+        '</span>' +
         '</span>'
       );
     },
-    // A photo that can be opened once, then a video — both kept all the same.
     view_once: function () {
       return (
-        '<span class="demo__swap">' +
-        picture('assets/img/features/view-once-photo.jpg', 'demo__bubble') +
-        picture('assets/img/features/view-once-video.jpg', 'demo__bubble demo__swap-in') +
+        chatHead('Mike', 'info') +
+        '<span class="chat__body">' +
+        '<span class="bubble bubble--once">' +
+        '<span class="once-icon" data-on="1">' + icon('view-once') + '</span>' +
+        swap(text('ob_photo'), text('ob_opened'), 1, 'once-label') +
+        '<small class="bubble__time">7:51</small>' +
         '</span>' +
-        '<span class="demo__arrow demo__reveal">' + icon('arrow-down') + '</span>' +
-        '<span class="demo__card demo__card--row demo__reveal">' +
-        '<span class="demo__thumb"><span class="demo__play demo__swap-in">' + icon('play') + '</span></span>' +
-        '<span class="demo__card-text">' +
-        '<span class="demo__tag">' + icon('bookmark') + text('view_once') + '</span>' +
-        '<span class="demo__again">' + icon('eye') + text('demo_view_again') + '</span>' +
+        arrowDown(2) +
+        '<span class="kept kept--row reveal" data-on="2">' +
+        photo('assets/img/onboarding/view-once.jpg', 'kept__thumb') +
+        '<span class="kept__side">' +
+        '<span class="kept__tag">' + icon('bookmark') + text('ob_saved') + '</span>' +
+        '<span class="pill">' + icon('eye') + text('demo_view_again') + '</span>' +
+        '</span>' +
         '</span>' +
         '</span>'
       );
     },
-    // A status, and the button that puts it in the gallery.
     status: function () {
       return (
-        '<span class="status-mock">' +
-        '<span class="status-mock__bars"><i></i><i></i><i></i></span>' +
-        '<span class="status-mock__who"><i class="status-mock__avatar"></i><i class="status-mock__name"></i></span>' +
-        '<i class="status-mock__sun"></i>' +
-        '<span class="status-mock__save">' +
-        '<span class="status-mock__idle">' + icon('download') + text('save_to_gallery') + '</span>' +
-        '<span class="status-mock__done">' + icon('check') + text('saved_to_gallery') + '</span>' +
+        '<span class="status">' +
+        photo('assets/img/onboarding/status.jpg', 'status__photo') +
+        '<span class="status__bars"><i></i><i><b></b></i><i></i></span>' +
+        '<span class="status__top">' +
+        '<span class="avatar avatar--secondary">E</span><b>Emma</b>' +
+        '<span class="chip">' + icon('eye-off') + text('ob_unseen') + '</span>' +
+        '</span>' +
+        '<span class="save" data-on="2">' +
+        swap(icon('download') + text('save_to_gallery'), icon('check') + text('saved_to_gallery'), 2) +
         '</span>' +
         '</span>'
       );
     },
-    // Blue ticks going quiet as Ghost mode is switched on.
     ticks: function () {
       return (
-        '<span class="demo__swap demo__ticks">' +
-        picture('assets/img/features/ticks-blue.png') +
-        picture('assets/img/features/ticks-hidden.png', 'demo__swap-in') +
+        '<span class="ghost" data-on="2">' +
+        '<span class="ghost__icon">' + icon('ghost') + '</span>' +
+        '<span class="ghost__text"><b>' + text('toolbar_ghost_title') + '</b>' + swap(text('ob_off'), text('ob_on'), 2) + '</span>' +
+        '<span class="switch" data-on="2"><i></i></span>' +
         '</span>' +
-        '<span class="demo__toggle">' +
-        '<span class="demo__toggle-label">' + icon('moon') + text('toolbar_ghost_title') + '</span>' +
-        '<span class="demo__switch"><i class="demo__knob"></i></span>' +
+        '<span class="seen">' +
+        '<span class="seen__label">' + text('ob_they_see') + '</span>' +
+        '<span class="bubble bubble--out">' + text('ob_ticks_msg') +
+        '<small class="bubble__time">9:41 <svg class="ticks" data-on="2" viewBox="0 0 22 14" aria-hidden="true"><path d="M1.5 7.5l3.5 3.5 7-8"/><path d="M9 11l7-8"/></svg></small>' +
+        '</span>' +
+        swap(text('ob_read'), text('ob_read_hidden'), 2, 'seen__status') +
         '</span>'
       );
     },
-    shield: function () {
-      return '<span class="demo__shield">' + icon('shield-check') + '</span>';
+    privacy: function (page) {
+      var go = page && page.go && screenDef(page.go) ? page.go : null;
+      return (
+        '<span class="shield">' + icon('shield-check') + '</span>' +
+        '<span class="promises">' +
+        '<span class="promise">' + icon('phone') + text('trust_local_title') + '</span>' +
+        '<span class="promise">' + icon('lock') + text('ob_never_see') + '</span>' +
+        '<span class="promise">' + icon('link') + text('trust_official_title') + '</span>' +
+        '</span>' +
+        // The way to connecting an account, one tap from the end of the story.
+        (go
+          ? '<button class="scene__go" type="button" data-go="' + escapeHtml(go) + '">' +
+            icon('link') + '<span>' + text('home_connect_title') + '</span>' + icon('chevron', 'scene__chevron') +
+            '</button>'
+          : '')
+      );
     },
   };
 
-  function demo(name) {
-    var draw = DEMOS[name];
-    return draw ? '<span class="demo demo--' + name + '">' + draw() + '</span>' : '';
+  function scene(name, page) {
+    var draw = SCENES[name];
+    if (!draw) return '';
+    return '<span class="scene scene--' + name + '" data-scene="' + name + '" data-beat="0">' + draw(page) + '</span>';
   }
 
-  // A picture moves only while it is on screen: one that is scrolled or swiped
-  // away holds still, and starts from the beginning of its story when it is
-  // first seen rather than halfway through it.
-  var demoObserver =
+  /** Moves a scene to a beat: everything due by then is switched on. */
+  function setBeat(el, beat) {
+    el.setAttribute('data-beat', beat);
+    el.style.setProperty('--beat', beat);
+    each(el.querySelectorAll('[data-on]'), function (part) {
+      part.classList.toggle('is-on', beat >= Number(part.getAttribute('data-on')));
+    });
+  }
+
+  var reducedMotion = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+
+  // A scene plays only while it is on screen, and starts from its first beat
+  // each time it comes back, so it is always seen from the beginning. With
+  // motion turned down it is simply shown finished.
+  var liveScenes = [];
+  var sceneObserver =
     typeof window.IntersectionObserver === 'function'
       ? new window.IntersectionObserver(
           function (entries) {
             entries.forEach(function (entry) {
-              entry.target.classList.toggle('is-live', entry.isIntersecting && entry.intersectionRatio >= 0.5);
+              var el = entry.target;
+              var at = liveScenes.indexOf(el);
+              if (entry.isIntersecting && entry.intersectionRatio >= 0.5) {
+                if (at === -1) liveScenes.push(el);
+                setBeat(el, 0);
+              } else if (at !== -1) {
+                liveScenes.splice(at, 1);
+              }
             });
           },
           { threshold: [0, 0.5] }
         )
       : null;
 
-  function watchDemos(section) {
-    each(section.querySelectorAll('.demo'), function (el) {
-      if (demoObserver) demoObserver.observe(el);
-      else el.classList.add('is-live');
+  function watchScenes(section) {
+    each(section.querySelectorAll('.scene'), function (el) {
+      var beats = BEATS[el.getAttribute('data-scene')] || 1;
+      if (reducedMotion || !sceneObserver) setBeat(el, beats - 1);
+      else sceneObserver.observe(el);
     });
-    // A picture that never arrives leaves the drawing without a hole in it.
-    each(section.querySelectorAll('.demo__img'), function (img) {
-      img.addEventListener('error', function () { img.hidden = true; });
+    // A photo that never arrives leaves its colour behind rather than a hole.
+    each(section.querySelectorAll('.scene img'), function (img) {
+      img.addEventListener('error', function () { img.style.visibility = 'hidden'; });
     });
+  }
+
+  if (!reducedMotion && sceneObserver) {
+    window.setInterval(function () {
+      if (document.hidden) return;
+      liveScenes.forEach(function (el) {
+        var beats = BEATS[el.getAttribute('data-scene')] || 1;
+        if (beats > 1) setBeat(el, (Number(el.getAttribute('data-beat')) + 1) % beats);
+      });
+    }, BEAT);
   }
 
   // ── Drawing a screen ────────────────────────────────────────────────────
@@ -390,6 +482,7 @@
   var cta = document.getElementById('cta');
   var ctaLabel = document.getElementById('cta-label');
   var ctaIcon = document.getElementById('cta-icon');
+  var footnote = document.getElementById('footnote');
 
   function cardIcon(name) {
     return '<span class="card__icon">' + icon(name) + '</span>';
@@ -411,6 +504,11 @@
     );
   }
 
+  /**
+   * The first-launch story: one page per scene, a dot for each, swiped or
+   * stepped through with the button at the bottom. Each page is the scene on
+   * top and its promise, a title and one line, under it.
+   */
   function renderStory(block) {
     var pages = visible(block.pages);
     if (!pages.length) return '';
@@ -422,8 +520,11 @@
           return (
             '<li class="story__page' + (i === 0 ? ' is-active' : '') + '">' +
             '<div class="story__content">' +
-            (page.stage ? '<div class="story__stage" aria-hidden="true">' + demo(page.stage) + '</div>' : '') +
-            (page.blocks || []).map(renderBlock).join('') +
+            scene(page.scene, page) +
+            '<div class="story__words">' +
+            '<h2 class="story__title">' + title(page.title) + '</h2>' +
+            (page.subtitle ? '<p class="story__subtitle">' + text(page.subtitle) + '</p>' : '') +
+            '</div>' +
             '</div>' +
             '</li>'
           );
@@ -431,10 +532,10 @@
         .join('') +
       '</ol>' +
       (pages.length > 1
-        ? '<div class="story__dots" aria-hidden="true">' +
+        ? '<div class="story__dots">' +
           pages
             .map(function (page, i) {
-              return '<span class="story__dot' + (i === 0 ? ' is-active' : '') + '"></span>';
+              return '<button class="story__dot' + (i === 0 ? ' is-active' : '') + '" type="button" data-dot="' + i + '" aria-label="' + (i + 1) + '/' + pages.length + '"></button>';
             })
             .join('') +
           '</div>'
@@ -475,7 +576,7 @@
           var tag = go ? 'button' : 'div';
           return (
             '<' + tag + ' class="feature"' + (go ? ' type="button" data-go="' + escapeHtml(go) + '"' : '') + '>' +
-            '<span class="feature__stage" aria-hidden="true">' + demo(item.demo) + '</span>' +
+            '<span class="feature__stage" aria-hidden="true">' + scene(item.scene) + '</span>' +
             '<span class="feature__body">' +
             '<span class="feature__text">' +
             '<span class="feature__title">' + text(item.title) + '</span>' +
@@ -724,7 +825,7 @@
       });
     });
     wireTracks(section);
-    watchDemos(section);
+    watchScenes(section);
     return section;
   }
 
@@ -785,6 +886,8 @@
     if (index === indexOf(holder)) return;
     var count = countOf(holder);
     holder.setAttribute('data-index', index);
+    // Moved off a page, the scene on it starts over, and the one arriving
+    // starts from its own beginning: the observer handles both.
     each(trackOf(holder).children, function (page, i) {
       page.classList.toggle('is-active', i === index);
     });
@@ -931,13 +1034,25 @@
     return !!story && indexOf(story) < countOf(story) - 1;
   }
 
-  /** The button at the bottom: on through the story while there is more of it, then into the app. */
+  /**
+   * The button at the bottom: on through the story while there is more of it,
+   * then into the app. Under it, on the story, one quiet line of reassurance.
+   */
   function drawCta() {
     var onwards = storyGoesOn();
-    var directional = onwards || isOnboarding;
+    var onStory = stack.length === 1 && !!bottomStory();
     ctaLabel.textContent = onwards ? t('continue') : isOnboarding ? t('get_started') : t('done');
-    ctaIcon.innerHTML = ICONS[directional ? 'arrow' : 'check'];
-    ctaIcon.classList.toggle('is-directional', directional);
+    // The story's button is words alone; the guide's "Done" keeps its tick.
+    // An <svg> has no `hidden` property, so the attribute is set by hand.
+    if (onStory) ctaIcon.setAttribute('hidden', '');
+    else ctaIcon.removeAttribute('hidden');
+    ctaIcon.innerHTML = ICONS[isOnboarding ? 'arrow' : 'check'];
+    ctaIcon.classList.toggle('is-directional', isOnboarding);
+
+    footnote.hidden = !onStory;
+    if (onStory) {
+      footnote.innerHTML = onwards ? icon('lock') + '<span>' + text('trust_local_title') + '</span>' : '<span>' + text('ob_disclaimer') + '</span>';
+    }
   }
 
   function onCta() {
@@ -1000,6 +1115,9 @@
         return;
       }
 
+      var dot = target.closest('[data-dot]');
+      if (dot) { showSlide(dot.closest('.story'), Number(dot.getAttribute('data-dot'))); return; }
+
       var option = target.closest('[data-go]');
       if (option) { push(option.getAttribute('data-go')); return; }
 
@@ -1019,7 +1137,7 @@
         return;
       }
       if (event.key === 'Escape') {
-        if (!previous() && Bridge.available) finish('skip');
+        if (!previous() && Bridge.available && !isOnboarding) finish('skip');
       }
     });
   }
@@ -1297,20 +1415,16 @@
     document.getElementById('lightbox-hint-text').textContent = t('pinch_hint');
     document.getElementById('lightbox-close').setAttribute('aria-label', t('done'));
 
-    exitButton.hidden = !Bridge.available;
-    if (isOnboarding) {
-      exitButton.innerHTML = '<span>' + text('skip') + '</span>';
-      exitButton.setAttribute('aria-label', t('skip'));
-    } else {
-      exitButton.innerHTML = icon('close');
-      exitButton.setAttribute('aria-label', t('done'));
-    }
+    // The guide can be closed at any time. The walkthrough cannot be skipped:
+    // its button is the only way through, so every page is seen once.
+    exitButton.hidden = !Bridge.available || isOnboarding;
+    exitButton.innerHTML = icon('close');
+    exitButton.setAttribute('aria-label', t('done'));
 
     app.classList.remove('is-loading');
   }
 
   build();
-  findVideos();
   wire();
   push(firstScreen, false);
 
@@ -1320,4 +1434,10 @@
   if (deepLink && deepLink !== firstScreen) push(deepLink, false);
 
   Bridge.post({ type: 'ready', total: total, index: depth(), lang: lang, platform: platform });
+
+  // The recordings are only reached a few taps in, so they are asked about
+  // once everything on the first screen has arrived — on a slow line the first
+  // page does not share the connection with requests it does not need yet.
+  if (document.readyState === 'complete') findVideos();
+  else window.addEventListener('load', findVideos);
 })();

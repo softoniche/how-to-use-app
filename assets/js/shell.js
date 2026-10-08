@@ -22,7 +22,7 @@
       '    <div class="topbar__row">',
       // The brand on the first screen, the way back on every other.
       '      <div class="brand" id="brand">',
-      '        <img class="brand__logo" id="brand-logo" src="assets/img/logo.png" alt="" />',
+      '        <img class="brand__logo" id="brand-logo" src="assets/img/logo.png?v=2" alt="" width="28" height="28" />',
       '        <span class="brand__name" id="brand-name"></span>',
       '      </div>',
       '      <button class="navback" id="back" type="button" hidden>',
@@ -43,6 +43,8 @@
       '      <span id="cta-label"></span>',
       '      <svg class="icon" id="cta-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>',
       '    </button>',
+      // On the story only: one line of reassurance under the button.
+      '    <p class="footnote" id="footnote" hidden></p>',
       '  </footer>',
       '</div>',
       '',
